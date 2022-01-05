@@ -49,6 +49,7 @@ dependencies = [
  "parking_lot",
  "prost",
  "prost-build",
+ "time",
  "tokio",
  "tracing",
 ]
@@ -574,6 +575,15 @@ dependencies = [
  "redox_syscall",
  "remove_dir_all",
  "winapi",
+]
+
+[[package]]
+name = "time"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

@@ -111,7 +111,14 @@ cbindgen --config cbindgen.toml --crate cardinal --output cardinal.h
 
 
 
-
+// touch target
+[
+    FsEvent {
+        path: "/Users/bytedance/code/cardinal/target",
+        flag: kFSEventStreamEventFlagItemInodeMetaMod | kFSEventStreamEventFlagItemIsDir,
+        id: 316120318,
+    },
+]
 
 // mkdir target/tmp
 [

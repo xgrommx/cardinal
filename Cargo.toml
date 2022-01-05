@@ -17,6 +17,7 @@ fsevent-sys = { git = "https://github.com/ldm0/fsevent-rust", branch = "more_api
 once_cell = { version = "1.9.0", features = ["parking_lot"] }
 parking_lot = "0.11.2"
 prost = "0.9.0"
+time = "0.3.5"
 tokio = { version = "1.15.0", features = ["full"] }
 tracing = "0.1.29"
 

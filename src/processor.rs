@@ -1,5 +1,6 @@
 //! Platform independent fs event processor.
 use crate::fsevent::FsEvent;
+
 use anyhow::{bail, Context, Result};
 use crossbeam::channel::{self, Receiver, Sender, TryRecvError, TrySendError};
 use fsevent_sys::FSEventStreamEventId;
