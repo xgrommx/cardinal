@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::path::Path;
 
 #[cfg(target_family = "windows")]
@@ -14,6 +15,22 @@ pub fn p2b(path: &Path) -> &[u8] {
 pub fn p2b(path: &Path) -> &[u8] {
     use std::os::wasm::ffi::OsStrExt;
     path.as_os_str().as_bytes()
+}
+
+#[cfg(target_family = "windows")]
+pub fn o2b(s: &OsStr) -> &[u8] {
+    // OsStr->Slice->Wtf8->[u8]
+    unsafe { std::mem::transmute(s) }
+}
+#[cfg(target_family = "unix")]
+pub fn o2b(s: &OsStr) -> &[u8] {
+    use std::os::unix::ffi::OsStrExt;
+    s.as_bytes()
+}
+#[cfg(target_family = "wasm")]
+pub fn o2b(s: &OsStr) -> &[u8] {
+    use std::os::wasm::ffi::OsStrExt;
+    s.as_bytes()
 }
 
 #[cfg(target_family = "windows")]
