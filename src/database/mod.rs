@@ -1,4 +1,5 @@
-use super::fs_entry::DiskEntry;
+use crate::fs_entry::DiskEntry;
+use crate::fsevent::FsEvent;
 
 use anyhow::{Context, Result};
 use bincode::{Decode, Encode};
@@ -35,8 +36,8 @@ impl Database {
         Ok(())
     }
 
-    pub fn merge(&mut self) {
-        self.fs_entry.merge()
+    pub fn merge(&mut self, event: &FsEvent) {
+        self.fs_entry.merge(event)
     }
 }
 
@@ -64,8 +65,8 @@ impl PartialDatabase {
         }
     }
 
-    pub fn merge(&mut self) {
-        self.fs_entry.merge()
+    pub fn merge(&mut self, event: &FsEvent) {
+        self.fs_entry.merge(event)
     }
 
     /// Complete modification merging. Convert self into a serializable database.

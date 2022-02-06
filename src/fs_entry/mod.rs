@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests;
 
+use crate::fsevent::FsEvent;
+
 use std::ffi::OsString;
 use std::io::{self, BufWriter};
 use std::iter::Peekable;
@@ -77,7 +79,7 @@ pub struct DiskEntry {
 }
 
 impl DiskEntry {
-    pub fn merge(&mut self) {
+    pub fn merge(&mut self, event: &FsEvent) {
         unimplemented!()
     }
 

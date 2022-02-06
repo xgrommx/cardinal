@@ -1,5 +1,5 @@
 //! Platform independent fs event processor.
-use crate::consts::DB_PATH;
+use crate::consts::{self, DB_PATH};
 use crate::database::{Database, PartialDatabase};
 use crate::fsevent::EventId;
 use crate::{fs_entry::DiskEntry, fsevent::FsEvent};
@@ -15,6 +15,7 @@ use tracing::info;
 use std::path::Path;
 use std::{collections::BTreeSet, path::PathBuf};
 
+/// The global event processor.
 pub static PROCESSOR: OnceCell<Processor> = OnceCell::new();
 
 pub struct Processor {
@@ -26,8 +27,11 @@ pub struct Processor {
     /// The event id all the events begins with.
     // TODO(ldm0) is this really needed?
     event_id: EventId,
-    /// Paths of current file system.
-    core_paths: Mutex<BTreeSet<PathBuf>>,
+    /// File system Database .
+    ///
+    /// It's initialized before event processing.
+    /// It's dropped on application closed.
+    database: Mutex<Option<Database>>,
 }
 
 impl Processor {
@@ -38,7 +42,7 @@ impl Processor {
             limited_fs_events: (sender, receiver),
             events_receiver,
             event_id,
-            core_paths: Mutex::new(BTreeSet::new()),
+            database: Mutex::new(None),
         }
     }
 
@@ -83,7 +87,11 @@ impl Processor {
             .events_receiver
             .recv()
             .context("System events channel closed.")?;
-        self.core_paths.lock().insert(event.path.clone());
+        self.database
+            .lock()
+            .as_mut()
+            .context("Fs database closed")?
+            .merge(&event);
         // Provide raw fs event.
         self.fill_fs_event(event).context("fill fs event failed.")?;
         Ok(())
@@ -97,8 +105,9 @@ impl Processor {
                 let mut partial_db = PartialDatabase::scan_fs();
                 info!("Fs scanning completes.");
                 while let Ok(event) = self.events_receiver.try_recv() {
-                    partial_db.merge();
+                    partial_db.merge(&event);
                 }
+                info!("Database construction completes.");
                 partial_db.complete_merge(utils::current_timestamp())
             }
         };
@@ -106,12 +115,23 @@ impl Processor {
     }
 
     pub fn block_on(&self) -> Result<()> {
-        let mut db = self.get_db().context("Get db failed.")?;
+        *self.database.lock() = Some(self.get_db().context("Get db failed.")?);
         loop {
-            if let Err(e) = self.process_event() {
-                panic!("processor is down. {}", e);
-            }
+            self.process_event().context("processor is down.")?;
         }
+    }
+
+    pub fn close(&self) -> Result<()> {
+        // Save and drop the database
+        let database = self
+            .database
+            .lock()
+            .take()
+            .context("Close uninit processor.")?;
+        database
+            .into_fs(Path::new(consts::DB_PATH))
+            .context("Save database failed.")?;
+        Ok(())
     }
 }
 
@@ -123,5 +143,3 @@ pub fn take_fs_events() -> Vec<FsEvent> {
         .map(|x| x.take_fs_events())
         .unwrap_or_default()
 }
-
-fn on_db_completes() {}

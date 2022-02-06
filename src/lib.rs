@@ -14,7 +14,7 @@ use fsevent::FsEvent;
 pub use processor::take_fs_events;
 use processor::Processor;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use core_foundation::{
     array::CFArray,
     base::TCFType,
@@ -25,9 +25,10 @@ use crossbeam::channel::{self, Receiver};
 use fsevent_sys::{
     kFSEventStreamCreateFlagFileEvents, kFSEventStreamCreateFlagNoDefer, FSEventStreamContext,
     FSEventStreamCreate, FSEventStreamEventFlags, FSEventStreamEventId, FSEventStreamRef,
-    FSEventStreamScheduleWithRunLoop, FSEventStreamStart, FSEventsGetCurrentEventId,
+    FSEventStreamScheduleWithRunLoop, FSEventStreamStart,
 };
 use runtime::runtime;
+use tracing::error;
 
 use std::{ffi::c_void, ptr, slice};
 
@@ -126,11 +127,22 @@ fn spawn_event_watcher(since: FSEventStreamEventId) -> Receiver<FsEvent> {
     receiver
 }
 
-fn spawn_event_processor(event_id: EventId, receiver: Receiver<FsEvent>) {
-    if let Err(_) = processor::PROCESSOR.set(Processor::new(event_id, receiver)) {
-        panic!("Multiple initialization");
-    }
+fn spawn_event_processor(event_id: EventId, receiver: Receiver<FsEvent>) -> Result<()> {
+    processor::PROCESSOR
+        .set(Processor::new(event_id, receiver))
+        .map_err(|_| anyhow!("Multiple initialization"))?;
+    // unwrap is legal here since processor is always init.
     runtime().spawn_blocking(|| processor::PROCESSOR.get().unwrap().block_on());
+    Ok(())
+}
+
+pub fn close_event_processor() -> Result<()> {
+    processor::PROCESSOR
+        .get()
+        .context("Global processor is not present")?
+        .close()
+        .context("Close global processor failed.")?;
+    Ok(())
 }
 
 pub fn init_sdk() {
@@ -138,5 +150,13 @@ pub fn init_sdk() {
     // A global event watcher spawned on a dedicated thread.
     let receiver = spawn_event_watcher(event_id.since);
     // A global event processor spawned on a dedicated thread.
-    spawn_event_processor(event_id, receiver);
+    if let Err(error) = spawn_event_processor(event_id, receiver) {
+        error!(?error, "spawn event processor failed")
+    }
+}
+
+pub fn close_sdk() {
+    if let Err(error) = close_event_processor() {
+        error!(?error, "close event processor failed")
+    }
 }
