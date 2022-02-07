@@ -15,8 +15,11 @@ use std::{
 
 #[derive(Debug)]
 pub struct FsEvent {
+    /// The path of this event.
     pub path: PathBuf,
+    /// The event type.
     pub flag: EventFlag,
+    /// The event id.
     pub id: FSEventStreamEventId,
 }
 
