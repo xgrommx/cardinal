@@ -29,16 +29,15 @@ impl Database {
     pub fn from_fs(path: &Path) -> Result<Self> {
         let file = File::open(path).context("load db from disk failed.")?;
         let mut file = BufReader::new(file);
-        let database = bincode::decode_from_std_read(&mut file, CONFIG)
-            .context("Decode failed.")?;
+        let database =
+            bincode::decode_from_std_read(&mut file, CONFIG).context("Decode failed.")?;
         Ok(database)
     }
 
     pub fn into_fs(&self, path: &Path) -> Result<()> {
         let file = File::create(path).context("open db file from disk failed.")?;
         let mut file = BufWriter::new(file);
-        bincode::encode_into_std_write(self, &mut file, CONFIG)
-            .context("Encode failed.")?;
+        bincode::encode_into_std_write(self, &mut file, CONFIG).context("Encode failed.")?;
         Ok(())
     }
 

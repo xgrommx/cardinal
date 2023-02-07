@@ -21,7 +21,7 @@ use bincode::{config::Configuration, Decode, Encode};
 use pathbytes::{b2p, o2b, p2b};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
-use walkdir::{IntoIter, WalkDir};
+use walkdir::{DirEntry, IntoIter, WalkDir};
 
 #[derive(
     Serialize, Deserialize, Decode, Encode, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug,
@@ -97,6 +97,7 @@ impl DiskEntry {
             .path
             .strip_prefix(&base_dir)
             .expect("event path doesn't share a common prefix with the root.");
+        // TODO: remove this peekable
         let mut path_segs = event_path.into_iter().peekable();
         // Ensure we are not modifying the root. (When this feature is really
         // needed, add a match branch here for special-case this).
@@ -169,71 +170,69 @@ impl DiskEntry {
 
     /// This function takes 400s+ on my mbp2019 512G. So don't use this function unless first boot.
     pub fn from_fs(path: &Path) -> DiskEntry {
-        fn scan_folder(
-            walker: &mut Peekable<DiskWalker>,
-            parent_path: &Path,
-            entry: &mut DiskEntry,
-        ) {
-            let DiskEntry { entries, .. } = entry;
+        fn scan_folder(walker: &mut Peekable<DiskWalker>, parent_entry: &DirEntry) -> DiskEntry {
+            fn get_meta(entry: &DirEntry) -> Option<Metadata> {
+                entry.metadata().ok().map(|x| x.into())
+            }
+            let mut current_entry = DiskEntry::new(get_meta(parent_entry));
+            let parent_depth = parent_entry.depth();
             loop {
-                // if a node under parent node.
-                let under_parent = walker
+                // if a node under current folder.
+                let under = walker
                     .peek()
-                    .map(|(path, _)| path.starts_with(parent_path))
+                    .map(|x| x.depth() > parent_depth)
                     .unwrap_or_default();
-                if !under_parent {
+                if !under {
                     break;
                 }
-                let (path, metadata) = match walker.next() {
-                    Some(x) => x,
-                    None => break,
+                let Some(entry) = walker.next() else {
+                    break
                 };
-                // Should never panic since walkdir shouldn't emit same path twice.
-                assert_ne!(path, parent_path);
-                // Should never panic since root we are scanning after root.
-                let name = o2b(path.file_name().unwrap());
-                let mut entry = DiskEntry::new(metadata);
-                scan_folder(walker, &path, &mut entry);
-                entries.insert(name.to_vec(), entry);
+                let sub_entry = if entry.file_type().is_dir() {
+                    scan_folder(walker, &entry)
+                } else {
+                    DiskEntry::new(get_meta(&entry))
+                };
+                current_entry
+                    .entries
+                    .insert(o2b(entry.file_name()).to_vec(), sub_entry);
             }
+            current_entry
         }
 
         let mut walker = DiskWalker::new(path).peekable();
-        let (root_path, metadata) = walker.next().unwrap();
-        assert_eq!(root_path, path);
-        let mut entry = DiskEntry::new(metadata);
-        scan_folder(&mut walker, path, &mut entry);
-        entry
+        let entry = walker.next().unwrap();
+        debug_assert_eq!(entry.path(), path);
+        scan_folder(&mut walker, &entry)
     }
 }
 
 pub struct DiskWalker {
-    walk_dir: Peekable<IntoIter>,
+    walk_dir: IntoIter,
 }
 
 impl Iterator for DiskWalker {
     /// Metadata is none when permission denied.
-    type Item = (PathBuf, Option<Metadata>);
+    type Item = DirEntry;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             match self.walk_dir.next()? {
                 Ok(entry) => {
+                    /*
                     let meta = entry.metadata().ok().map(|x| x.into());
+                    let depth = entry.depth();
                     let path = entry.into_path();
-                    break Some((path, meta));
+                     */
+                    break Some(entry);
                 }
-                Err(e) => {
-                    if let Some(path) = e.path() {
-                        // If we are trying to scan the inner elements in permission
-                        // denied folder, walkdir will return a error with the path
-                        // of the folder, here we filter out the dir path emitted in
-                        // this situation.
-                        if let Ok(x) = fs::symlink_metadata(path) {
-                            if !x.is_dir() {
-                                break Some((path.to_owned(), None));
-                            }
-                        }
-                    }
+                Err(_e) => {
+                    // When will this error occur: https://docs.rs/walkdir/latest/walkdir/struct.IntoIter.html#errors
+                    //
+                    // Info this error provides: https://docs.rs/walkdir/latest/walkdir/struct.Error.html#method.path
+                    //
+                    // If we are trying to scan the inner elements in permission
+                    // denied folder, walkdir will return a error with the path
+                    // of the folder. So this path in error is useless. continue
                 }
             }
         }
@@ -243,7 +242,7 @@ impl Iterator for DiskWalker {
 impl DiskWalker {
     pub fn new(path: &Path) -> Self {
         Self {
-            walk_dir: WalkDir::new(path).into_iter().peekable(),
+            walk_dir: WalkDir::new(path).same_file_system(true).into_iter(),
         }
     }
 }
