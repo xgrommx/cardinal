@@ -23,21 +23,6 @@ use tracing::info;
 
 const DATABASE_URL: &str = std::env!("DATABASE_URL");
 
-fn get_conn() -> Result<SqliteConnection> {
-    let mut conn = SqliteConnection::establish(DATABASE_URL).with_context(|| {
-        anyhow!(
-            "Establish sqlite connection with url: `{}` failed.",
-            DATABASE_URL
-        )
-    })?;
-    conn.batch_execute(CONNECTION_PRAGMAS)
-        .context("Run connection pragmas failed.")?;
-    conn.run_pending_migrations(MIGRATIONS)
-        .map_err(|e| anyhow!(e))
-        .context("Run connection migrations failed.")?;
-    Ok(conn)
-}
-
 fn scan_fs(conn: &mut CardinalDbConnection) -> Result<()> {
     let (raw_entry_sender, raw_entry_receiver) = bounded(MAX_RAW_ENTRY_COUNT);
 
@@ -92,6 +77,20 @@ struct CardinalDbConnection {
 }
 
 impl CardinalDbConnection {
+    fn connect() -> Result<Self> {
+        let mut conn = SqliteConnection::establish(DATABASE_URL).with_context(|| {
+            anyhow!(
+                "Establish sqlite connection with url: `{}` failed.",
+                DATABASE_URL
+            )
+        })?;
+        conn.batch_execute(CONNECTION_PRAGMAS)
+            .context("Run connection pragmas failed.")?;
+        conn.run_pending_migrations(MIGRATIONS)
+            .map_err(|e| anyhow!(e))
+            .context("Run connection migrations failed.")?;
+        Ok(Self { conn })
+    }
     fn get_event_id(&mut self) -> Result<EventId> {
         use schema::db_meta::dsl::*;
         let event_id = db_meta
@@ -153,8 +152,7 @@ pub struct Database {
 
 impl Database {
     pub fn from_fs() -> Result<Self> {
-        let conn = get_conn().context("Get db connection failed.")?;
-        let mut conn = CardinalDbConnection { conn };
+        let mut conn = CardinalDbConnection::connect().context("Get db connection failed.")?;
         let event_id = match conn.get_event_id() {
             Ok(x) => x,
             Err(e) => {
