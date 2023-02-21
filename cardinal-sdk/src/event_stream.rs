@@ -20,7 +20,11 @@ struct EventStream {
 }
 
 impl EventStream {
-    pub fn new(paths: Vec<String>, since: FSEventStreamEventId, callback: EventsCallback) -> Self {
+    pub fn new(
+        paths: Vec<String>,
+        raw_event_id: FSEventStreamEventId,
+        callback: EventsCallback,
+    ) -> Self {
         extern "C" fn drop_callback(info: *const c_void) {
             let _cb: Box<EventsCallback> = unsafe { Box::from_raw(info as _) };
         }
@@ -76,7 +80,7 @@ impl EventStream {
                 raw_callback,
                 context,
                 paths.as_concrete_TypeRef() as _,
-                since,
+                raw_event_id,
                 0.1,
                 kFSEventStreamCreateFlagNoDefer | kFSEventStreamCreateFlagFileEvents,
             )
@@ -98,12 +102,12 @@ impl EventStream {
     }
 }
 
-pub fn spawn_event_watcher(since: FSEventStreamEventId) -> Receiver<FsEvent> {
+pub fn spawn_event_watcher(raw_event_id: FSEventStreamEventId) -> Receiver<FsEvent> {
     let (sender, receiver) = unbounded();
     std::thread::spawn(move || {
         EventStream::new(
             vec!["/".into()],
-            since,
+            raw_event_id,
             Box::new(move |mut events| {
                 // Fun fact, events here are not sorted by event id.
                 events.sort_by_key(|x| x.id);

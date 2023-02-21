@@ -57,6 +57,16 @@ pub struct DiskEntry {
     pub meta: Metadata,
 }
 
+impl DiskEntry {
+    pub fn to_raw(&self) -> Result<DiskEntryRaw, bincode::error::EncodeError> {
+        let the_meta = bincode::encode_to_vec(&self.meta, CONFIG)?;
+        Ok(DiskEntryRaw {
+            the_path: p2b(&self.path).to_vec(),
+            the_meta,
+        })
+    }
+}
+
 impl TryFrom<DiskEntryRaw> for DiskEntry {
     type Error = bincode::error::DecodeError;
     fn try_from(entry: DiskEntryRaw) -> Result<Self, Self::Error> {
@@ -64,17 +74,6 @@ impl TryFrom<DiskEntryRaw> for DiskEntry {
         Ok(Self {
             path: b2p(&entry.the_path).to_path_buf(),
             meta,
-        })
-    }
-}
-
-impl TryFrom<DiskEntry> for DiskEntryRaw {
-    type Error = bincode::error::EncodeError;
-    fn try_from(entry: DiskEntry) -> Result<Self, Self::Error> {
-        let the_meta = bincode::encode_to_vec(&entry.meta, CONFIG)?;
-        Ok(Self {
-            the_path: p2b(&entry.path).to_vec(),
-            the_meta,
         })
     }
 }

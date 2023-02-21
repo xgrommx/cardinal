@@ -48,5 +48,5 @@ fn entry_to_raw(entry: ignore::DirEntry) -> Result<DiskEntryRaw> {
         path: entry.path().to_path_buf(),
         meta: metadata.into(),
     };
-    entry.try_into().context("Encode entry failed.")
+    entry.to_raw().context("Encode entry failed.")
 }

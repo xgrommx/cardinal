@@ -1,9 +1,9 @@
 #![feature(iter_array_chunks)]
 mod consts;
 mod disk_entry;
+mod event_stream;
 mod fs_visitor;
 mod fsevent;
-mod event_stream;
 mod models;
 mod schema;
 mod utils;
@@ -16,12 +16,16 @@ use crossbeam_channel::bounded;
 use diesel::connection::SimpleConnection;
 use diesel::prelude::*;
 use diesel_migrations::MigrationHarness;
+use disk_entry::DiskEntry;
 use fsevent::EventFlag;
 use fsevent::EventId;
 use fsevent::FsEvent;
+use fsevent_sys::FSEventStreamEventId;
 use models::DbMeta;
 use models::DiskEntryRaw;
+use pathbytes::p2b;
 use std::time::Instant;
+use tracing::error;
 use tracing::info;
 
 const DATABASE_URL: &str = std::env!("DATABASE_URL");
@@ -94,7 +98,7 @@ impl CardinalDbConnection {
             .context("Run connection migrations failed.")?;
         Ok(Self { conn })
     }
-    fn get_event_id(&mut self) -> Result<EventId> {
+    fn get_event_id(&mut self) -> Result<FSEventStreamEventId> {
         use schema::db_meta::dsl::*;
         let event_id = db_meta
             .select(the_value)
@@ -106,7 +110,7 @@ impl CardinalDbConnection {
             .context("Decode event id failed.")
     }
 
-    fn save_event_id(&mut self, event_id: &EventId) -> Result<()> {
+    fn save_event_id(&mut self, event_id: &FSEventStreamEventId) -> Result<()> {
         use schema::db_meta::dsl::*;
         let event_id =
             bincode::encode_to_vec(event_id, CONFIG).context("Encode event id failed.")?;
@@ -121,6 +125,26 @@ impl CardinalDbConnection {
             .set(the_value.eq(&new_meta.the_value))
             .execute(&mut self.conn)
             .context("Upsert event id to db failed.")?;
+        Ok(())
+    }
+
+    fn save_entry(&mut self, entry: &DiskEntryRaw) -> Result<()> {
+        use schema::dir_entrys::dsl::*;
+        diesel::insert_into(dir_entrys)
+            .values(entry)
+            .on_conflict(the_path)
+            .do_update()
+            .set(the_meta.eq(&entry.the_meta))
+            .execute(&mut self.conn)
+            .context("Upsert entry to db failed.")?;
+        Ok(())
+    }
+
+    fn delete_entry(&mut self, path_to_delete: &[u8]) -> Result<()> {
+        use schema::dir_entrys::dsl::*;
+        diesel::delete(dir_entrys.filter(the_path.eq(path_to_delete)))
+            .execute(&mut self.conn)
+            .context("Remove entry in db failed.")?;
         Ok(())
     }
 
@@ -149,7 +173,7 @@ impl CardinalDbConnection {
 /// current time) into the file system.
 pub struct Database {
     /// The time starting to scan this file system tree.
-    event_id: EventId,
+    event_id: FSEventStreamEventId,
     conn: CardinalDbConnection,
 }
 
@@ -163,9 +187,9 @@ impl Database {
                 // scan_fs needs a lot of time, so event id should be gotten before it.
                 let new_event_id = EventId::now();
                 snapshot_fs(&mut conn).context("Scan fs failed.")?;
-                conn.save_event_id(&new_event_id)
+                conn.save_event_id(&new_event_id.raw_event_id)
                     .context("Save current event id failed")?;
-                new_event_id
+                new_event_id.raw_event_id
             }
         };
 
@@ -173,23 +197,44 @@ impl Database {
         Ok(Self { event_id, conn })
     }
 
-    pub fn merge_event(&self, fs_event: FsEvent) {
+    pub fn merge_event(&mut self, fs_event: FsEvent) -> Result<()> {
         match fs_event.flag {
-            EventFlag::Create => {}
-            EventFlag::Delete => {}
-            EventFlag::Modify => {}
+            EventFlag::Delete | EventFlag::Modify | EventFlag::Create => {
+                let path = &fs_event.path;
+                match std::fs::metadata(&path) {
+                    Ok(metadata) => {
+                        let entry = DiskEntry {
+                            path: fs_event.path,
+                            meta: metadata.into(),
+                        }
+                        .to_raw()
+                        .context("Encode meta failed.")?;
+                        self.conn.save_entry(&entry).context("Save entry failed.")?;
+                    }
+                    Err(_e) => {
+                        self.conn
+                            .delete_entry(p2b(path))
+                            .context("Delete entry failed.")?;
+                    }
+                }
+            }
         }
+        self.conn
+            .save_event_id(&fs_event.id)
+            .context("Save event id failed.")
     }
 }
 
 fn main() {
     tracing_subscriber::fmt().with_env_filter("debug").init();
     let _ = std::fs::remove_file(DATABASE_URL);
-    let db = Database::from_fs().unwrap();
-    let receiver = event_stream::spawn_event_watcher(db.event_id.since);
+    let mut db = Database::from_fs().unwrap();
+    let receiver = event_stream::spawn_event_watcher(db.event_id);
     for fs_event in receiver.iter() {
         dbg!(&fs_event);
-        db.merge_event(fs_event);
+        if let Err(e) = db.merge_event(fs_event) {
+            error!(?e, "merge event failed:");
+        }
     }
 }
 
