@@ -185,9 +185,7 @@ impl DiskEntry {
                 if !under {
                     break;
                 }
-                let Some(entry) = walker.next() else {
-                    break
-                };
+                let Some(entry) = walker.next() else { break };
                 let sub_entry = if entry.file_type().is_dir() {
                     scan_folder(walker, &entry)
                 } else {

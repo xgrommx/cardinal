@@ -23,7 +23,7 @@ fn compare_test_entry(a: &DiskEntry, b: &DiskEntry) {
         .iter()
         .zip(b.entries.iter())
         .for_each(|((aname, a), (bname, b))| {
-            assert_eq!(b2p(&aname), b2p(bname));
+            unsafe { assert_eq!(b2p(&aname), b2p(bname)) };
             compare_test_entry(a, b);
         })
 }

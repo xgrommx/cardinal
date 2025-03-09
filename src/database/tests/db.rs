@@ -69,7 +69,7 @@ fn inner(prefix: &Path, entry: &DiskEntry, output: &mut ReadableDatabase) {
         entry.metadata.as_ref().map(Into::into),
     ));
     for (name, entry) in entry.entries.iter() {
-        let prefix = prefix.join(b2p(name));
+        let prefix = prefix.join(unsafe { b2p(name) });
         inner(&prefix, entry, output);
     }
 }
