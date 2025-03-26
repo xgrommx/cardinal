@@ -77,8 +77,7 @@ impl EventFlag {
             | self.contains(EventFlag::KernelDropped)
         {
             ScanType::ReScan
-        } else if self.contains(EventFlag::EventIdsWrapped)
-            | self.contains(EventFlag::HistoryDone)
+        } else if self.contains(EventFlag::EventIdsWrapped) | self.contains(EventFlag::HistoryDone)
         {
             ScanType::Nop
         } else if self.contains(EventFlag::RootChanged) {

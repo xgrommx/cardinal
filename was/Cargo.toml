@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 cardinal-sdk.path = "../cardinal-sdk"
 crossbeam = "0.8"
+chrono = "0.4"
