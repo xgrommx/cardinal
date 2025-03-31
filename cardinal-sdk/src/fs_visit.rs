@@ -2,7 +2,6 @@ use bincode::Encode;
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use serde::Serialize;
 use std::{
-    collections::HashSet,
     fs,
     io::Error,
     path::PathBuf,
@@ -29,12 +28,8 @@ pub struct WalkData {
     pub num_dirs: AtomicUsize,
 }
 
-pub fn walk_it(dirs: HashSet<PathBuf>, walk_data: &WalkData) -> Vec<Node> {
-    let top_level_nodes: Vec<_> = dirs
-        .into_iter()
-        .filter_map(|d| walk(d, walk_data, 0))
-        .collect();
-    top_level_nodes
+pub fn walk_it(dir: PathBuf, walk_data: &WalkData) -> Option<Node> {
+    walk(dir, walk_data, 0)
 }
 
 fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
