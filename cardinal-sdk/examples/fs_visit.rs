@@ -1,5 +1,5 @@
 use cardinal_sdk::fs_visit::{Node, WalkData, walk_it};
-use radix_trie::{Trie, TrieCommon};
+use rustc_hash::FxHashMap;
 use std::{
     fs::{self, File},
     io::BufWriter,
@@ -7,6 +7,11 @@ use std::{
     sync::Arc,
     time::Instant,
 };
+
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[derive(Default)]
 struct NamePool {
@@ -49,7 +54,7 @@ impl NamePool {
 
 fn construct_trie_and_namepool(
     node: &Arc<Node>,
-    node_trie: &mut Trie<String, Vec<Arc<Node>>>,
+    node_trie: &mut FxHashMap<String, Vec<Arc<Node>>>,
     name_pool: &mut NamePool,
 ) {
     if let Some(nodes) = node_trie.get_mut(&node.name) {
@@ -58,15 +63,15 @@ fn construct_trie_and_namepool(
         name_pool.push(&node.name);
         node_trie.insert(node.name.clone(), vec![node.clone()]);
     };
-    for child in &node.children {
-        if let Some(nodes) = node_trie.get_mut(&child.name) {
-            nodes.push(child.clone());
+    for node in &node.children {
+        if let Some(nodes) = node_trie.get_mut(&node.name) {
+            nodes.push(node.clone());
         } else {
-            name_pool.push(&child.name);
-            node_trie.insert(child.name.clone(), vec![child.clone()]);
+            name_pool.push(&node.name);
+            node_trie.insert(node.name.clone(), vec![node.clone()]);
         };
-        for grandchild in &child.children {
-            construct_trie_and_namepool(&grandchild, node_trie, name_pool);
+        for grand_child in &node.children {
+            construct_trie_and_namepool(&grand_child, node_trie, name_pool);
         }
     }
 }
@@ -81,7 +86,7 @@ fn main() {
 
     {
         let cache_time = Instant::now();
-        let mut node_trie = Trie::new();
+        let mut node_trie = FxHashMap::default();
         let mut name_pool = NamePool::new();
         construct_trie_and_namepool(&node, &mut node_trie, &mut name_pool);
         dbg!(cache_time.elapsed());
@@ -89,9 +94,9 @@ fn main() {
 
         let search_time = Instant::now();
         for (i, name) in name_pool.search_substr("athbyt").enumerate() {
-            if let Some(subtrie) = node_trie.subtrie(name) {
-                for (key, _) in subtrie.iter() {
-                    println!("[{}] key: {}", i, key);
+            if let Some(nodes) = node_trie.get(name) {
+                for node in nodes {
+                    println!("[{}] key: {}", i, node.name);
                 }
             }
         }
