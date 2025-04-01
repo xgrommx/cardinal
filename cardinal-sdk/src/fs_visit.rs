@@ -81,11 +81,11 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
                                     walk_data.num_files.fetch_add(1, Ordering::Relaxed);
                                     let metadata = entry.metadata().ok();
                                     let name = entry
-                                            .path()
-                                            .file_name()
-                                            .and_then(|x| x.to_str())
-                                            .map(|x| x.to_string())
-                                            .unwrap_or_default();
+                                        .path()
+                                        .file_name()
+                                        .and_then(|x| x.to_str())
+                                        .map(|x| x.to_string())
+                                        .unwrap_or_default();
                                     return Some(Node {
                                         children: vec![],
                                         data: NodeData::new(name, &metadata),
