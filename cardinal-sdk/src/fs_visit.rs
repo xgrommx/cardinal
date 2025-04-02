@@ -14,6 +14,7 @@ use std::{
 #[derive(Serialize, Encode, Debug)]
 pub struct Node {
     pub name: String,
+    // TODO(ldm0): is this arc still needed?
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<Arc<Node>>,
 }

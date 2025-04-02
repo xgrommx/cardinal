@@ -1,5 +1,6 @@
 use cardinal_sdk::fs_visit::{Node, WalkData, walk_it};
 use mimalloc::MiMalloc;
+use slab::Slab;
 use std::{
     collections::BTreeMap,
     fs::{self, File},
@@ -15,6 +16,12 @@ static GLOBAL: MiMalloc = MiMalloc;
 #[derive(Default)]
 struct NamePool {
     pool: Vec<u8>,
+}
+
+struct SlabNode {
+    parent: Option<usize>,
+    children: Vec<usize>,
+    name: String,
 }
 
 impl NamePool {
@@ -51,6 +58,25 @@ impl NamePool {
     }
 }
 
+fn construct_nodex_graph(
+    parent: Option<usize>,
+    node: &Arc<Node>,
+    slab: &mut Slab<SlabNode>,
+) -> usize {
+    let slab_node = SlabNode {
+        parent,
+        children: vec![],
+        name: node.name.clone(),
+    };
+    let index = slab.insert(slab_node);
+    slab[index].children = node
+        .children
+        .iter()
+        .map(|node| construct_nodex_graph(Some(index), node, slab))
+        .collect();
+    index
+}
+
 /// Combine the construction routine of NamePool and BTreeMap since we can deduplicate node name for free.
 // TODO(ldm0): Memory optimization can be done by letting name index reference the name in the pool(gc need to be considered though)
 fn construct_name_index_and_namepool(
@@ -78,12 +104,23 @@ fn construct_name_index_and_namepool(
 }
 
 fn main() {
+    // first multithreaded walk the file system then get a simple tree structure
     let walk_data = WalkData::default();
     let visit_time = Instant::now();
     let node = walk_it(PathBuf::from("/"), &walk_data).expect("failed to walk");
     let node = Arc::new(node);
     dbg!(walk_data);
     dbg!(visit_time.elapsed());
+
+    // next construct the node graph which is single threaded but allows cross referencing
+    {
+        let slab_time = Instant::now();
+        let mut slab = Slab::new();
+        let node_graph = construct_nodex_graph(None, &node, &mut slab);
+        dbg!(slab_time.elapsed());
+        dbg!(node_graph);
+        dbg!(slab.len());
+    }
 
     {
         let name_index_time = Instant::now();
