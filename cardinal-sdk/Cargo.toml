@@ -34,7 +34,7 @@ radix_trie = "0.2.1"
 memchr = "2.7.4"
 rustc-hash = "2.1.1"
 mimalloc = "0.1.44"
-slab = "0.4.9"
+slab = { git = "https://github.com/ldm0/slab", branch = "bincode_support", features = ["serde", "bincode"] }
 
 [dev-dependencies]
 serde_json = "1"

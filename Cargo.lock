@@ -1238,10 +1238,11 @@ dependencies = [
 [[package]]
 name = "slab"
 version = "0.4.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f92a496fb766b417c996b9c5e57daf2f7ad3b0bebe1ccfca4856390e3d3bb67"
+source = "git+https://github.com/ldm0/slab?branch=bincode_support#5d894391795e8b69dd2664767bb70a9945775688"
 dependencies = [
  "autocfg",
+ "bincode",
+ "serde",
 ]
 
 [[package]]

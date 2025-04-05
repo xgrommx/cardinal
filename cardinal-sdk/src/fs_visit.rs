@@ -2,39 +2,17 @@ use bincode::Encode;
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use serde::Serialize;
 use std::{
-    fs::{self, Metadata},
+    fs,
     io::Error,
     path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-    time::UNIX_EPOCH,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[derive(Serialize, Encode, Debug)]
 pub struct Node {
-    // TODO(ldm0): is this arc still needed?
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub children: Vec<Arc<Node>>,
-    pub data: NodeData,
-}
-
-#[derive(Serialize, Encode, Debug)]
-pub struct NodeData {
+    pub children: Vec<Node>,
     pub name: String,
-    pub ctime: Option<u64>,
-    pub mtime: Option<u64>,
-}
-
-impl NodeData {
-    pub fn new(name: String, metadata: &Option<Metadata>) -> Self {
-        let (ctime, mtime) = match metadata {
-            Some(metadata) => ctime_mtime_from_metadata(metadata),
-            None => (None, None),
-        };
-        Self { name, ctime, mtime }
-    }
 }
 
 #[derive(Default, Debug)]
@@ -45,21 +23,6 @@ pub struct WalkData {
 
 pub fn walk_it(dir: PathBuf, walk_data: &WalkData) -> Option<Node> {
     walk(dir, walk_data, 0)
-}
-
-fn ctime_mtime_from_metadata(metadata: &fs::Metadata) -> (Option<u64>, Option<u64>) {
-    // TODO(ldm0): is this fast enough?
-    let ctime = metadata
-        .created()
-        .ok()
-        .and_then(|x| x.duration_since(UNIX_EPOCH).ok())
-        .map(|x| x.as_secs());
-    let mtime = metadata
-        .modified()
-        .ok()
-        .and_then(|x| x.duration_since(UNIX_EPOCH).ok())
-        .map(|x| x.as_secs());
-    (ctime, mtime)
 }
 
 fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
@@ -79,7 +42,6 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
                                     return walk(entry.path(), walk_data, depth + 1);
                                 } else {
                                     walk_data.num_files.fetch_add(1, Ordering::Relaxed);
-                                    let metadata = entry.metadata().ok();
                                     let name = entry
                                         .path()
                                         .file_name()
@@ -88,7 +50,7 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
                                         .unwrap_or_default();
                                     return Some(Node {
                                         children: vec![],
-                                        data: NodeData::new(name, &metadata),
+                                        name,
                                     });
                                 }
                             }
@@ -101,7 +63,6 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
                     }
                     None
                 })
-                .map(Arc::new)
                 .collect(),
             Err(failed) => {
                 if handle_error_and_retry(&failed) {
@@ -120,10 +81,7 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
         .and_then(|x| x.to_str())
         .map(|x| x.to_string())
         .unwrap_or_default();
-    Some(Node {
-        children,
-        data: NodeData::new(name, metadata),
-    })
+    Some(Node { children, name })
 }
 
 fn handle_error_and_retry(failed: &Error) -> bool {
