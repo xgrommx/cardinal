@@ -1,7 +1,7 @@
 mod cache;
 mod query;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use bincode::{Decode, Encode};
 use cache::{PersistentStorage, cache_exists, read_cache_from_file, write_cache_to_file};
 use clap::Parser;
@@ -113,7 +113,7 @@ struct Cli {
 }
 
 fn walkfs_to_slab() -> (usize, Slab<SlabNode>) {
-    // 先多线程构建树形文件名列表(不能直接创建 slab 因为 slab 无法多线程构建)
+    // 先多线程构建树形文件名列表(不能直接创建 slab 因为 slab 无法多线程构建(slab 节点有相互引用，不想加锁))
     let walk_data = WalkData::with_ignore_directory(PathBuf::from("/System/Volumes/Data"));
     let visit_time = Instant::now();
     let node = walk_it(PathBuf::from("/"), &walk_data).expect("failed to walk");
@@ -151,26 +151,114 @@ fn name_pool(name_index: &BTreeMap<String, Vec<usize>>) -> NamePool {
     name_pool
 }
 
+struct SearchCache {
+    slab: Slab<SlabNode>,
+    name_index: BTreeMap<String, Vec<usize>>,
+    name_pool: NamePool,
+}
+
+impl SearchCache {
+    fn new(slab: Slab<SlabNode>, name_index: BTreeMap<String, Vec<usize>>) -> Self {
+        // name pool construction speed is fast enough that caching it doesn't worth it.
+        let name_pool = name_pool(&name_index);
+        Self {
+            slab,
+            name_index,
+            name_pool,
+        }
+    }
+
+    fn search(&self, line: &str) -> Result<Vec<usize>> {
+        let segments = query_segmentation(line);
+        if segments.is_empty() {
+            bail!("unprocessed query: {:?}", segments);
+        }
+        let search_time = Instant::now();
+        let mut node_set: Option<Vec<usize>> = None;
+        for segment in &segments {
+            if let Some(nodes) = &node_set {
+                let mut new_node_set = Vec::with_capacity(nodes.len());
+                for &node in nodes {
+                    let childs = &self.slab[node].children;
+                    for child in childs {
+                        if match segment {
+                            Segment::Substr(substr) => self.slab[*child].name.contains(*substr),
+                            Segment::Prefix(prefix) => self.slab[*child].name.starts_with(*prefix),
+                            Segment::Exact(exact) => self.slab[*child].name == *exact,
+                            Segment::Suffix(suffix) => self.slab[*child].name.ends_with(*suffix),
+                        } {
+                            new_node_set.push(*child);
+                        }
+                    }
+                }
+                node_set = Some(new_node_set);
+            } else {
+                let names: Vec<_> = match segment {
+                    Segment::Substr(substr) => self.name_pool.search_substr(*substr).collect(),
+                    Segment::Prefix(prefix) => {
+                        let mut buffer = vec![0u8];
+                        buffer.extend_from_slice(prefix.as_bytes());
+                        self.name_pool.search_prefix(&buffer).collect()
+                    }
+                    Segment::Exact(exact) => {
+                        let mut buffer = vec![0u8];
+                        buffer.extend_from_slice(exact.as_bytes());
+                        buffer.push(0);
+                        self.name_pool.search_exact(&buffer).collect()
+                    }
+                    Segment::Suffix(suffix) => {
+                        // Query contains nul is very rare
+                        let suffix = CString::new(*suffix).expect("Query contains nul");
+                        self.name_pool.search_suffix(&suffix).collect()
+                    }
+                };
+                let mut nodes = Vec::with_capacity(names.len());
+                for name in names {
+                    nodes.extend_from_slice(
+                        self.name_index
+                            .get(name)
+                            .context("Name index or name pool corrupted")?,
+                    );
+                }
+                node_set = Some(nodes);
+            }
+        }
+        let search_time = search_time.elapsed();
+        dbg!(search_time);
+        // Safety: node_set can't be None since segments is not empty.
+        Ok(node_set.unwrap())
+    }
+
+    fn node_path(&self, index: usize) -> String {
+        self.slab[index].path(&self.slab)
+    }
+
+    fn into_persistent_storage(self) -> PersistentStorage {
+        PersistentStorage {
+            slab: self.slab,
+            name_index: self.name_index,
+        }
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let (slab, name_index) = if cli.refresh || !cache_exists() {
+    let mut cache = if cli.refresh || !cache_exists() {
         println!("Walking filesystem...");
         let (_slab_root, slab) = walkfs_to_slab();
         let name_index = name_index(&slab);
-        (slab, name_index)
+        SearchCache::new(slab, name_index)
     } else {
         println!("Reading cache...");
         read_cache_from_file()
-            .map(|storage| (storage.slab, storage.name_index)) // 从 PersistentStorage 中解构
+            .map(|PersistentStorage { slab, name_index }| SearchCache::new(slab, name_index)) // 从 PersistentStorage 中解构
             .unwrap_or_else(|e| {
                 eprintln!("Failed to read cache: {:?}. Re-walking filesystem...", e);
                 let (_slab_root, slab) = walkfs_to_slab();
                 let name_index = name_index(&slab);
-                (slab, name_index)
+                SearchCache::new(slab, name_index)
             })
     };
-    // name pool construction speed is fast enough that caching it doesn't worth it.
-    let name_pool = name_pool(&name_index);
 
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
@@ -185,70 +273,20 @@ fn main() -> Result<()> {
         } else if line == "/bye" {
             break;
         }
-        let segments = query_segmentation(line);
-        let search_time = Instant::now();
-        let mut node_set: Option<Vec<usize>> = None;
-        if segments.is_empty() {
-            eprintln!("unprocessed query: {:?}", segments);
-            continue;
-        }
-        for segment in &segments {
-            if let Some(nodes) = &node_set {
-                let mut new_node_set = Vec::with_capacity(nodes.len());
-                for &node in nodes {
-                    let childs = &slab[node].children;
-                    for child in childs {
-                        if match segment {
-                            Segment::Substr(substr) => slab[*child].name.contains(*substr),
-                            Segment::Prefix(prefix) => slab[*child].name.starts_with(*prefix),
-                            Segment::Exact(exact) => slab[*child].name == *exact,
-                            Segment::Suffix(suffix) => slab[*child].name.ends_with(*suffix),
-                        } {
-                            new_node_set.push(*child);
-                        }
-                    }
+
+        match cache.search(line) {
+            Ok(node_set) => {
+                for (i, node) in node_set.into_iter().enumerate() {
+                    println!("[{}] {}", i, cache.node_path(node));
                 }
-                node_set = Some(new_node_set);
-            } else {
-                let names: Vec<_> = match segment {
-                    Segment::Substr(substr) => name_pool.search_substr(*substr).collect(),
-                    Segment::Prefix(prefix) => {
-                        let mut buffer = vec![0u8];
-                        buffer.extend_from_slice(prefix.as_bytes());
-                        name_pool.search_prefix(&buffer).collect()
-                    }
-                    Segment::Exact(exact) => {
-                        let mut buffer = vec![0u8];
-                        buffer.extend_from_slice(exact.as_bytes());
-                        buffer.push(0);
-                        name_pool.search_exact(&buffer).collect()
-                    }
-                    Segment::Suffix(suffix) => {
-                        // Query contains nul is very rare
-                        let suffix = CString::new(*suffix).expect("Query contains nul");
-                        name_pool.search_suffix(&suffix).collect()
-                    }
-                };
-                let mut nodes = Vec::with_capacity(names.len());
-                for name in names {
-                    nodes.extend_from_slice(
-                        name_index
-                            .get(name)
-                            .context("Name index or name pool corrupted")?,
-                    );
-                }
-                node_set = Some(nodes);
+            }
+            Err(e) => {
+                eprintln!("{:?}", e);
             }
         }
-        let search_time = search_time.elapsed();
-        for (i, node) in node_set.unwrap().into_iter().enumerate() {
-            println!("[{}] {}", i, slab[node].path(&slab));
-        }
-        dbg!(search_time);
     }
 
-    write_cache_to_file(PersistentStorage { slab, name_index })
-        .context("Write cache to file failed.")?;
+    write_cache_to_file(cache.into_persistent_storage()).context("Write cache to file failed.")?;
     Ok(())
 }
 
@@ -258,3 +296,4 @@ fn main() -> Result<()> {
 // - segment search cache(same search routine will be triggered while user is typing, should cache exact[..], suffix, suffix/exact[..])
 // [] tui?
 // - lazy metadata design
+// 或许最后可以在首次扫描过程中就把中间结果 在索引逻辑和搜索逻辑之间抛来抛去，做到边索引边搜索
