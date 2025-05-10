@@ -15,7 +15,7 @@ use std::{
     ffi::CString,
     fs::Metadata,
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Instant, UNIX_EPOCH},
 };
 
@@ -96,7 +96,7 @@ fn walkfs_to_slab() -> (usize, Slab<SlabNode>) {
     // 先多线程构建树形文件名列表(不能直接创建 slab 因为 slab 无法多线程构建(slab 节点有相互引用，不想加锁))
     let walk_data = WalkData::with_ignore_directory(PathBuf::from("/System/Volumes/Data"));
     let visit_time = Instant::now();
-    let node = walk_it(PathBuf::from("/"), &walk_data).expect("failed to walk");
+    let node = walk_it(&Path::new("/"), &walk_data).expect("failed to walk");
     dbg!(walk_data);
     dbg!(visit_time.elapsed());
 

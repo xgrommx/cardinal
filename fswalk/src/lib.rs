@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{
     fs,
     io::Error,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -35,12 +35,12 @@ impl WalkData {
     }
 }
 
-pub fn walk_it(dir: PathBuf, walk_data: &WalkData) -> Option<Node> {
+pub fn walk_it(dir: &Path, walk_data: &WalkData) -> Option<Node> {
     walk(dir, walk_data, 0)
 }
 
-fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
-    if walk_data.ignore_directory.as_ref() == Some(&dir) {
+fn walk(dir: &Path, walk_data: &WalkData, depth: usize) -> Option<Node> {
+    if walk_data.ignore_directory.as_deref() == Some(dir) {
         return None;
     }
     let metadata = &dir.metadata().ok();
@@ -54,12 +54,12 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
                 .filter_map(|entry| {
                     match &entry {
                         Ok(entry) => {
-                            if walk_data.ignore_directory.as_ref() == Some(&dir) {
+                            if walk_data.ignore_directory.as_deref() == Some(dir) {
                                 return None;
                             }
                             if let Ok(data) = entry.file_type() {
                                 if data.is_dir() {
-                                    return walk(entry.path(), walk_data, depth + 1);
+                                    return walk(&entry.path(), walk_data, depth + 1);
                                 } else {
                                     walk_data.num_files.fetch_add(1, Ordering::Relaxed);
                                     let name = entry
@@ -77,7 +77,7 @@ fn walk(dir: PathBuf, walk_data: &WalkData, depth: usize) -> Option<Node> {
                         }
                         Err(failed) => {
                             if handle_error_and_retry(failed) {
-                                return walk(dir.clone(), walk_data, depth);
+                                return walk(dir, walk_data, depth);
                             }
                         }
                     }
