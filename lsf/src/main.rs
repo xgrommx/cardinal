@@ -1,7 +1,7 @@
 mod cli;
 mod persistent;
 mod query;
-mod search_cache;
+mod cache;
 
 use anyhow::{Context, Result};
 use bincode::{Decode, Encode};
@@ -13,7 +13,7 @@ use cardinal_sdk::{
 use clap::Parser;
 use cli::Cli;
 use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
-use search_cache::SearchCache;
+use cache::SearchCache;
 use serde::{Deserialize, Serialize};
 use std::{fs::Metadata, io::Write, time::UNIX_EPOCH};
 
