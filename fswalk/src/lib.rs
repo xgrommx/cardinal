@@ -39,18 +39,18 @@ pub fn walk_it(dir: &Path, walk_data: &WalkData) -> Option<Node> {
     walk(dir, walk_data)
 }
 
-fn walk(dir: &Path, walk_data: &WalkData) -> Option<Node> {
-    if walk_data.ignore_directory.as_deref() == Some(dir) {
+fn walk(path: &Path, walk_data: &WalkData) -> Option<Node> {
+    if walk_data.ignore_directory.as_deref() == Some(path) {
         return None;
     }
-    let metadata = match dir.metadata() {
+    let metadata = match path.metadata() {
         Ok(metadata) => Some(metadata),
         // If it's not found, we definitely don't want it.
         Err(e) if e.kind() == ErrorKind::NotFound => return None,
         // If it's permission denied or something, we still want to insert it into the tree.
         Err(e) => {
             if handle_error_and_retry(&e) {
-                dir.metadata().ok()
+                path.metadata().ok()
             } else {
                 None
             }
@@ -58,7 +58,7 @@ fn walk(dir: &Path, walk_data: &WalkData) -> Option<Node> {
     };
     let children = if metadata.as_ref().map(|x| x.is_dir()).unwrap_or_default() {
         walk_data.num_dirs.fetch_add(1, Ordering::Relaxed);
-        let read_dir = fs::read_dir(&dir);
+        let read_dir = fs::read_dir(&path);
         match read_dir {
             Ok(entries) => entries
                 .into_iter()
@@ -66,7 +66,7 @@ fn walk(dir: &Path, walk_data: &WalkData) -> Option<Node> {
                 .filter_map(|entry| {
                     match &entry {
                         Ok(entry) => {
-                            if walk_data.ignore_directory.as_deref() == Some(dir) {
+                            if walk_data.ignore_directory.as_deref() == Some(path) {
                                 return None;
                             }
                             if let Ok(data) = entry.file_type() {
@@ -89,7 +89,7 @@ fn walk(dir: &Path, walk_data: &WalkData) -> Option<Node> {
                         }
                         Err(failed) => {
                             if handle_error_and_retry(failed) {
-                                return walk(dir, walk_data);
+                                return walk(path, walk_data);
                             }
                         }
                     }
@@ -98,7 +98,7 @@ fn walk(dir: &Path, walk_data: &WalkData) -> Option<Node> {
                 .collect(),
             Err(failed) => {
                 if handle_error_and_retry(&failed) {
-                    return walk(dir, walk_data);
+                    return walk(path, walk_data);
                 } else {
                     vec![]
                 }
@@ -108,7 +108,7 @@ fn walk(dir: &Path, walk_data: &WalkData) -> Option<Node> {
         walk_data.num_files.fetch_add(1, Ordering::Relaxed);
         vec![]
     };
-    let name = dir
+    let name = path
         .file_name()
         .and_then(|x| x.to_str())
         .map(|x| x.to_string())
