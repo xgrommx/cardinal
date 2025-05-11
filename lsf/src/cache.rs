@@ -281,6 +281,7 @@ impl SearchCache {
     // `Self::scan_path_recursive`function returns index of the constructed node.
     // - If path is not under the watch root, None is returned.
     // - Procedure contains metadata fetching, if metadata fetching failed, None is returned.
+    // - `raw_path` is not allowed to be root.
     pub fn scan_path_recursive(&mut self, raw_path: &Path) -> Option<usize> {
         // Ensure path is under the watch root
         let Ok(path) = raw_path.strip_prefix(&self.path) else {
@@ -290,12 +291,24 @@ impl SearchCache {
             self.remove_node_path(path);
             return None;
         };
+        // Root scanning is not allowed, under such circumstances, we should
+        // clear all things and do a full rescan(It should be processed outside
+        // this function or add a separate branch to prune name index slab namepool etc.).
+        let parent = path.parent().expect("Scanning root?");
         // Ensure node of the path parent is existed
-        let parent = path.parent().map(|parent| self.create_node_chain(parent));
+        let parent = self.create_node_chain(parent);
+        // Remove node(if exists) and do a full rescan
+        if let Some(&old_node) = self.slab[parent]
+            .children
+            .iter()
+            .find(|&&x| path.file_name() == Some(OsStr::new(&self.slab[x].name)))
+        {
+            self.remove_node(old_node);
+        }
         let walk_data = WalkData::with_ignore_directory(PathBuf::from("/System/Volumes/Data"));
         walk_it(raw_path, &walk_data).map(|node| {
-            update_node_slab_and_name_index_and_name_pool(
-                parent,
+            create_node_slab_update_name_index_and_name_pool(
+                Some(parent),
                 &node,
                 &mut self.slab,
                 &mut self.name_index,
@@ -422,7 +435,8 @@ fn construct_node_slab(parent: Option<usize>, node: &Node, slab: &mut Slab<SlabN
     index
 }
 
-fn update_node_slab_and_name_index_and_name_pool(
+/// ATTENTION: This function doesn't remove existing node.
+fn create_node_slab_update_name_index_and_name_pool(
     parent: Option<usize>,
     node: &Node,
     slab: &mut Slab<SlabNode>,
@@ -436,7 +450,10 @@ fn update_node_slab_and_name_index_and_name_pool(
     };
     let index = slab.insert(slab_node);
     if let Some(indexes) = name_index.get_mut(&node.name) {
-        indexes.push(index);
+        // TODO(ldm0): optimize to binary search?
+        if !indexes.iter().any(|&x| x == index) {
+            indexes.push(index);
+        }
     } else {
         name_pool.push(&node.name);
         name_index.insert(node.name.clone(), vec![index]);
@@ -445,7 +462,7 @@ fn update_node_slab_and_name_index_and_name_pool(
         .children
         .iter()
         .map(|node| {
-            update_node_slab_and_name_index_and_name_pool(
+            create_node_slab_update_name_index_and_name_pool(
                 Some(index),
                 node,
                 slab,
@@ -511,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_fs_events() {
+    fn test_handle_fs_event_add() {
         // 创建临时文件夹
         let temp_dir = TempDir::new("test_events").expect("Failed to create temp directory");
         let temp_path = temp_dir.path();
@@ -534,6 +551,36 @@ mod tests {
         // 调用 handle_fs_events 方法
         cache.handle_fs_events(mock_events);
 
+        assert_eq!(cache.slab.len(), 2);
+        assert_eq!(cache.name_index.len(), 2);
+        assert_eq!(cache.search("new_file.txt").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_handle_fs_event_add_before_search() {
+        // 创建临时文件夹
+        let temp_dir = TempDir::new("test_events").expect("Failed to create temp directory");
+        let temp_path = temp_dir.path();
+        fs::File::create(temp_path.join("new_file.txt")).expect("Failed to create file");
+
+        // 初始化 SearchCache
+        let mut cache = SearchCache::walk_fs(temp_dir.path().to_path_buf());
+
+        assert_eq!(cache.slab.len(), 2);
+        assert_eq!(cache.name_index.len(), 2);
+
+        // 模拟一些文件系统事件
+        let mock_events = vec![FsEvent {
+            path: temp_path.join("new_file.txt"),
+            id: cache.last_event_id + 1,
+            flag: EventFlag::ItemCreated,
+        }];
+
+        // 调用 handle_fs_events 方法
+        cache.handle_fs_events(mock_events);
+
+        assert_eq!(cache.slab.len(), 2);
+        assert_eq!(cache.name_index.len(), 2);
         assert_eq!(cache.search("new_file.txt").unwrap().len(), 1);
     }
 }
