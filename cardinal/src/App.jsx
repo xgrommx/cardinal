@@ -9,10 +9,22 @@ function App() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isStatusBarVisible, setIsStatusBarVisible] = useState(true);
 
-  once('init_completed', () => {
-    setIsInitialized(true);
-  });
+  useEffect(() => {
+    once('init_completed', () => {
+      setIsInitialized(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (isInitialized) {
+      const timer = setTimeout(() => {
+        setIsStatusBarVisible(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isInitialized]);
 
   const handleSearch = async () => {
     const searchResults = await invoke("search", { query });
@@ -54,9 +66,16 @@ function App() {
           )}
         </AutoSizer>
       </div>
-      <div className="status-bar">
-        {isInitialized ? 'Initialized' : 'Initializing...'}
-      </div>
+      {isStatusBarVisible && (
+        <div className={`status-bar ${isInitialized ? 'fade-out' : ''}`}>
+          {isInitialized ? 'Initialized' : 
+            <div className="initializing-container">
+              <div className="spinner"></div>
+              <span>Initializing...</span>
+            </div>
+          }
+        </div>
+      )}
     </main>
   );
 }

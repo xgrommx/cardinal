@@ -101,6 +101,37 @@ button {
   font-size: 0.9em;
   color: #6c757d; /* 使用更柔和的文本颜色 */
   border-top: 1px solid #dee2e6;
+  transition: transform 0.5s ease-in-out;
+}
+
+.status-bar.fade-out {
+  transform: translateY(100%);
+}
+
+.initializing-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border-left-color: #09f;
+  margin-right: 8px;
+
+  animation: spin 1s ease infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-color-scheme: dark) {
