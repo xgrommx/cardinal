@@ -451,39 +451,45 @@ impl SearchCache {
         })
     }
 
-    fn handle_fs_event(&mut self, event: FsEvent) {
+    fn handle_fs_event(&mut self, event: FsEvent) -> Result<(), HandleFSEError> {
         match event.flag.scan_type() {
             // Sometimes there are rediculous events assuming dir as file, so we always scan them as folder
             ScanType::SingleNode | ScanType::Folder => {
+                if event.path == self.path {
+                    info!("Root node changed, rescan: {:?}", event);
+                    return Err(HandleFSEError::Rescan);
+                }
                 let folder = self.scan_path_recursive(&event.path);
                 if folder.is_some() {
                     info!("Node changed: {:?}, {folder:?}", event.path);
                 }
             }
             ScanType::ReScan => {
-                // TOOD(ldm0): if rescan happens, we should re-listen the fsevents with latest event id.
-                // send a signal to root, try reset the whole process.
-                todo!("no rescan");
-                /*
-                info!("!!! Rescanning");
-                self.rescan();
-                info!("!!! Rescan done: {:?}", self.slab_root);
-                    */
+                info!("Event rescan: {:?}", event);
+                return Err(HandleFSEError::Rescan);
             }
             ScanType::Nop => {}
         }
         self.update_last_event_id(event.id);
+        Ok(())
     }
 
-    pub fn handle_fs_events(&mut self, events: Vec<FsEvent>) {
+    pub fn handle_fs_events(&mut self, events: Vec<FsEvent>) -> Result<(), HandleFSEError> {
         for event in events {
             if event.flag.contains(EventFlag::HistoryDone) {
                 info!("History processing done: {:?}", event);
-                continue;
             }
-            self.handle_fs_event(event);
+            self.handle_fs_event(event)?;
         }
+        Ok(())
     }
+}
+
+/// Error type for `SearchCache::handle_fs_event`.
+#[derive(Debug)]
+pub enum HandleFSEError {
+    /// Full rescan is required.
+    Rescan,
 }
 
 fn construct_node_slab(parent: Option<usize>, node: &Node, slab: &mut Slab<SlabNode>) -> usize {
@@ -610,7 +616,7 @@ mod tests {
             flag: EventFlag::ItemCreated,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap();
 
         assert_eq!(cache.slab.len(), 2);
         assert_eq!(cache.name_index.len(), 2);
@@ -634,7 +640,7 @@ mod tests {
             flag: EventFlag::ItemCreated,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap();
 
         assert_eq!(cache.slab.len(), 2);
         assert_eq!(cache.name_index.len(), 2);
@@ -660,7 +666,7 @@ mod tests {
             flag: EventFlag::ItemCreated,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap();
 
         assert_eq!(cache.slab.len(), 2);
         assert_eq!(cache.name_index.len(), 2);
@@ -686,7 +692,7 @@ mod tests {
             flag: EventFlag::ItemRemoved,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap();
 
         // Though the file in fsevents removed, we should still preserve it since it exists on disk.
         assert_eq!(cache.slab.len(), 1);
@@ -711,7 +717,7 @@ mod tests {
             flag: EventFlag::ItemRemoved,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap();
 
         // Though the file in fsevents removed, we should still preserve it since it exists on disk.
         assert_eq!(cache.slab.len(), 2);
@@ -743,7 +749,7 @@ mod tests {
             },
         ];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap();
 
         // Though the file in fsevents removed, we should still preserve it since it exists on disk.
         assert_eq!(cache.slab.len(), 2);
@@ -771,7 +777,7 @@ mod tests {
             flag: EventFlag::RootChanged,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap_err();
 
         assert_eq!(cache.slab.len(), 7);
         assert_eq!(cache.name_index.len(), 7);
@@ -801,13 +807,11 @@ mod tests {
             flag: EventFlag::RootChanged,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap_err();
 
-        assert_eq!(cache.slab.len(), 7);
-        assert_eq!(cache.name_index.len(), 7);
-        assert_eq!(cache.search("new_file").unwrap().len(), 3);
-        assert_eq!(cache.search("good.rs").unwrap().len(), 1);
-        assert_eq!(cache.search("foo").unwrap().len(), 1);
+        // Rescan is required
+        assert_eq!(cache.slab.len(), 1);
+        assert_eq!(cache.name_index.len(), 1);
     }
 
     #[test]
@@ -831,13 +835,10 @@ mod tests {
             flag: EventFlag::ItemModified,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap_err();
 
-        assert_eq!(cache.slab.len(), 7);
-        assert_eq!(cache.name_index.len(), 7);
-        assert_eq!(cache.search("new_file").unwrap().len(), 3);
-        assert_eq!(cache.search("good.rs").unwrap().len(), 1);
-        assert_eq!(cache.search("foo").unwrap().len(), 1);
+        assert_eq!(cache.slab.len(), 1);
+        assert_eq!(cache.name_index.len(), 1);
     }
 
     #[test]
@@ -872,7 +873,7 @@ mod tests {
             flag: EventFlag::ItemRemoved | EventFlag::ItemIsDir,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap();
 
         assert_eq!(cache.slab.len(), 5);
         assert_eq!(cache.name_index.len(), 5);
@@ -915,7 +916,7 @@ mod tests {
             flag: EventFlag::ItemRemoved | EventFlag::ItemIsDir,
         }];
 
-        cache.handle_fs_events(mock_events);
+        cache.handle_fs_events(mock_events).unwrap();
 
         assert_eq!(cache.slab.len(), 9);
         assert_eq!(cache.name_index.len(), 9);
@@ -1000,7 +1001,7 @@ mod tests {
             id: last_event_id,
             flag: EventFlag::ItemCreated,
         };
-        cache.handle_fs_events(vec![file_event]);
+        cache.handle_fs_events(vec![file_event]).unwrap();
 
         let file_nodes = cache
             .search("event_file.txt")
@@ -1040,7 +1041,7 @@ mod tests {
             id: last_event_id,
             flag: EventFlag::ItemCreated | EventFlag::ItemIsDir,
         };
-        cache.handle_fs_events(vec![dir_event]);
+        cache.handle_fs_events(vec![dir_event]).unwrap();
 
         // Check metadata for the directory itself
         let dir_nodes = cache
@@ -1311,7 +1312,7 @@ mod tests {
             id: last_event_id + 1,
             flag: EventFlag::ItemCreated,
         };
-        cache.handle_fs_events(vec![event]);
+        cache.handle_fs_events(vec![event]).unwrap();
 
         let results_event_file = cache
             .query_files("event_added_file.txt".to_string())
@@ -1335,7 +1336,7 @@ mod tests {
             id: last_event_id_2 + 1,
             flag: EventFlag::ItemCreated | EventFlag::ItemIsDir, // scan_path_recursive will scan children
         };
-        cache.handle_fs_events(vec![event_dir]);
+        cache.handle_fs_events(vec![event_dir]).unwrap();
 
         let results_event_dir = cache.query_files("event_added_dir".to_string()).unwrap();
         assert_eq!(results_event_dir.len(), 1);
