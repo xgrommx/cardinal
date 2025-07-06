@@ -2,8 +2,8 @@
 use anyhow::{Context, Result};
 use cardinal_sdk::{EventFlag, EventWatcher};
 use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
-use search_cache::{HandleFSEError, SearchCache, SearchNode};
-use std::{cell::LazyCell, path::PathBuf};
+use search_cache::{HandleFSEError, SearchCache, SearchNode, WalkData};
+use std::{cell::LazyCell, path::PathBuf, sync::{atomic::{AtomicBool, Ordering}, Arc}, time::Duration};
 use tauri::{Emitter, RunEvent, State};
 use tracing::{info, level_filters::LevelFilter};
 use tracing_subscriber::EnvFilter;
@@ -66,7 +66,6 @@ pub fn run() -> Result<()> {
     let app_handle = app.handle().to_owned();
     // 启动后台处理线程
     std::thread::spawn(move || {
-        // 初始化搜索缓存
         const WATCH_ROOT: &str = "/";
         const FSE_LATENCY_SECS: f64 = 0.1;
         let path = PathBuf::from(WATCH_ROOT);
@@ -75,13 +74,30 @@ pub fn run() -> Result<()> {
             let app_handle_clone = app_handle.clone();
             LazyCell::new(move || app_handle_clone.emit("init_completed", ()).unwrap())
         };
+        // 初始化搜索缓存
         let mut cache = if let Ok(cached) = SearchCache::try_read_persistent_cache(&path) {
             info!("Loaded existing cache");
             // If using cache, defer the emit init process to HistoryDone event processing
             cached
         } else {
             info!("Walking filesystem...");
-            let cache = SearchCache::walk_fs(path.clone());
+            let walk_data = Arc::new(WalkData::new(PathBuf::from("/System/Volumes/Data"), false));
+            let walk_data_clone = walk_data.clone();
+            let app_handle_clone = app_handle.clone();
+            let walking_done = Arc::new(AtomicBool::new(false));
+            let walking_done_clone = walking_done.clone();
+
+            std::thread::spawn(move || {
+                while !walking_done_clone.load(Ordering::Relaxed) {
+                    let dirs = walk_data_clone.num_dirs.load(Ordering::Relaxed);
+                    let files = walk_data_clone.num_files.load(Ordering::Relaxed);
+                    app_handle_clone.emit("status_update", format!("Walking filesystem... {} directories, {} files...", dirs, files)).unwrap();
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            });
+
+            let cache = SearchCache::walk_fs_with_walk_data(path.clone(), &walk_data);
+            walking_done.store(true, Ordering::Relaxed);
             // If full file system scan, emit initialized instantly.
             *emit_init;
             cache
