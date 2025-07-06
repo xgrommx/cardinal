@@ -67,7 +67,9 @@ pub fn run() -> Result<()> {
     // 启动后台处理线程
     std::thread::spawn(move || {
         // 初始化搜索缓存
-        let path = PathBuf::from("/");
+        const WATCH_ROOT: &str = "/";
+        const FSE_LATENCY_SECS: f64 = 0.1;
+        let path = PathBuf::from(WATCH_ROOT);
         let mut processed_events = 0;
         let emit_init = {
             let app_handle_clone = app_handle.clone();
@@ -86,9 +88,12 @@ pub fn run() -> Result<()> {
         };
 
         // 启动事件监听器
-        let mut event_watcher = EventWatcher::spawn("/".to_string(), cache.last_event_id(), 0.1);
+        let mut event_watcher = EventWatcher::spawn(
+            WATCH_ROOT.to_string(),
+            cache.last_event_id(),
+            FSE_LATENCY_SECS,
+        );
         info!("Started background processing thread");
-
         loop {
             crossbeam_channel::select! {
                 recv(finish_rx) -> tx => {
@@ -114,7 +119,7 @@ pub fn run() -> Result<()> {
                         // Here we clear event_watcher first as rescan may take a lot of time
                         event_watcher.clear();
                         cache.rescan();
-                        event_watcher = EventWatcher::spawn("/".to_string(), cache.last_event_id(), 0.1);
+                        event_watcher = EventWatcher::spawn(WATCH_ROOT.to_string(), cache.last_event_id(), FSE_LATENCY_SECS);
                     }
                 }
             }
