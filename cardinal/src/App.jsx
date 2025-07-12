@@ -34,12 +34,17 @@ class LRUCache {
   has(key) {
     return this.cache.has(key);
   }
+
+  clear() {
+    this.cache.clear();
+  }
 }
 
 function App() {
-  const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const lruCache = useRef(new LRUCache(1000));
+  const infiniteLoaderRef = useRef(null);
+  const debounceTimerRef = useRef(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isStatusBarVisible, setIsStatusBarVisible] = useState(true);
   const [statusText, setStatusText] = useState("Walking filesystem...");
@@ -63,26 +68,43 @@ function App() {
   }, [isInitialized]);
 
   useEffect(() => {
-    const handleSearch = async () => {
-      if (query.trim() === '') {
-        setResults([]);
-        return;
-      }
-      const searchResults = await invoke("search", { query });
-      setResults(searchResults);
-    };
+    // console.log("results", results);
+    if (infiniteLoaderRef.current) {
+      // console.log("resetting load more rows cache");
+      infiniteLoaderRef.current.resetLoadMoreRowsCache(true);
+    }
+  }, [results]);
 
-    const timer = setTimeout(() => {
-      handleSearch();
-    }, 300); // 300ms debounce
+  const handleSearch = async (query) => {
+    // console.log("handleSearch", query);
+    let searchResults = [];
+    if (query.trim() !== '') {
+      searchResults = await invoke("search", { query });
+    }
+    // console.log("got query results, clearing lru cache", query, searchResults);
+    lruCache.current.clear();
+    setResults(searchResults);
+  };
 
-    return () => clearTimeout(timer);
-  }, [query]);
+  const onQueryChange = (e) => {
+    const currentQuery = e.target.value;
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleSearch(currentQuery);
+    }, 300);
+  };
 
-  const isRowLoaded = ({ index }) => lruCache.current.has(index);
+  const isRowLoaded = ({ index }) => {
+    let loaded = lruCache.current.has(index);
+    // console.log("isRowLoaded loading", index, loaded)
+    return loaded;
+  };
 
   const loadMoreRows = async ({ startIndex, stopIndex }) => {
-    const searchResults = await invoke("get_nodes_info", { results: results.slice(startIndex, stopIndex + 1)});
+    let rows = results.slice(startIndex, stopIndex + 1);
+    // console.log("start loading more rows", startIndex, stopIndex, rows);
+    const searchResults = await invoke("get_nodes_info", { results: rows });
+    // console.log("loading more rows", startIndex, stopIndex, searchResults);
     for (let i = startIndex; i <= stopIndex; i++) {
       lruCache.current.put(i, searchResults[i - startIndex]);
     }
@@ -90,13 +112,13 @@ function App() {
 
   const rowRenderer = ({ key, index, style }) => {
     const item = lruCache.current.get(index);
-
+    // console.log("rendering row", index, item);
     return (
       <div key={key} style={style} className="row">
         {item ? (
           item
         ) : (
-          <div className="placeholder">Loading...</div>
+          <div/>
         )}
       </div>
     );
@@ -107,7 +129,7 @@ function App() {
       <div className="search-container">
         <input
           id="search-input"
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={onQueryChange}
           placeholder="Search for files and folders..."
           spellCheck={false}
           autoCorrect="off"
@@ -117,6 +139,7 @@ function App() {
       </div>
       <div className="results-container" style={{ flex: 1 }}>
         <InfiniteLoader
+          ref={infiniteLoaderRef}
           isRowLoaded={isRowLoaded}
           loadMoreRows={loadMoreRows}
           rowCount={results.length}
@@ -140,7 +163,7 @@ function App() {
       </div>
       {isStatusBarVisible && (
         <div className={`status-bar ${isInitialized ? 'fade-out' : ''}`}>
-          {isInitialized ? 'Initialized' : 
+          {isInitialized ? 'Initialized' :
             <div className="initializing-container">
               <div className="spinner"></div>
               <span>{statusText}</span>

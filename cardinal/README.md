@@ -13,6 +13,8 @@
     - /app/good + /app/good/Cargo.toml == /app/good
     - /app/good/aaa.txt + /app/good/aaa.txt == /app/good/aaa.txt
 - 正则搜索
+- 搜索结果自动更新
+- namepool 并行搜索
 
 ```bash
 npm run tauri dev -- --release
