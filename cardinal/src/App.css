@@ -1,3 +1,27 @@
+/* 悬浮横向滚动条容器 */
+.horizontal-scrollbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 7px;
+  z-index: 11;
+  pointer-events: none;
+}
+
+.horizontal-scrollbar-inner {
+  position: absolute;
+  height: 7px;
+  background: rgba(255,255,255,0.41114);
+  border-radius: 6px;
+  box-shadow: 0 0 2px 0 rgba(0,0,0,0.10);
+  transition: background 0.5s;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.horizontal-scrollbar-inner:hover {
+  background: rgba(255,255,255,0.43554);
+}
 /* === Base & Theme Tokens === */
 
 :root {
@@ -148,7 +172,7 @@ button:active {
 }
 
 .vertical-scrollbar-inner {
-  width: 100%;
+  width: 7px;
   border-radius: 6px;
   /* 255 * x + 32 * (1 - x) = 150   =>   x = 0.41114 */
   background: rgba(255,255,255,0.41114);

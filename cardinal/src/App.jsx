@@ -58,10 +58,11 @@ function App() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isStatusBarVisible, setIsStatusBarVisible] = useState(true);
   const [statusText, setStatusText] = useState("Walking filesystem...");
-  // 新增refs用于同步竖直滚动条
+  // refs for scrollbars
   const scrollAreaRef = useRef(null);
   const listRef = useRef(null);
   const [verticalBar, setVerticalBar] = useState({ top: 0, height: 0, visible: false });
+  const [horizontalBar, setHorizontalBar] = useState({ left: 0, width: 0, visible: false });
 
   useEffect(() => {
     listen('status_update', (event) => {
@@ -87,7 +88,7 @@ function App() {
     }
   }, [results]);
 
-  // 竖直滚动条同步逻辑
+  // 竖直/横向滚动条同步逻辑
   useEffect(() => {
     function updateVerticalBar() {
       if (!listRef.current || !scrollAreaRef.current) return;
@@ -105,15 +106,58 @@ function App() {
       const barTop = (scrollTop / totalHeight) * visibleHeight;
       setVerticalBar({ top: barTop, height: barHeight, visible: true });
     }
+    function updateHorizontalBar() {
+      if (!scrollAreaRef.current) return;
+      const el = scrollAreaRef.current;
+      const scrollWidth = el.scrollWidth;
+      const clientWidth = el.clientWidth;
+      const scrollLeft = el.scrollLeft;
+      if (scrollWidth <= clientWidth) {
+        setHorizontalBar({ left: 0, width: 0, visible: false });
+        return;
+      }
+      const barWidth = Math.max(32, clientWidth * clientWidth / scrollWidth);
+      const barLeft = (scrollLeft / scrollWidth) * clientWidth;
+      setHorizontalBar({ left: barLeft, width: barWidth, visible: true });
+    }
     updateVerticalBar();
+    updateHorizontalBar();
     if (!listRef.current) return;
     const grid = listRef.current.Grid || listRef.current;
-    const onScroll = () => updateVerticalBar();
-    grid && grid._scrollingContainer && grid._scrollingContainer.addEventListener('scroll', onScroll);
+    const onVScroll = () => updateVerticalBar();
+    grid && grid._scrollingContainer && grid._scrollingContainer.addEventListener('scroll', onVScroll);
+    const el = scrollAreaRef.current;
+    const onHScroll = () => updateHorizontalBar();
+    el && el.addEventListener('scroll', onHScroll);
+    window.addEventListener('resize', updateHorizontalBar);
     return () => {
-      grid && grid._scrollingContainer && grid._scrollingContainer.removeEventListener('scroll', onScroll);
+      grid && grid._scrollingContainer && grid._scrollingContainer.removeEventListener('scroll', onVScroll);
+      el && el.removeEventListener('scroll', onHScroll);
+      window.removeEventListener('resize', updateHorizontalBar);
     };
-  }, [results]);
+  }, [results, colWidths]);
+  // 拖动横向滚动条
+  const onHorizontalBarMouseDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startLeft = horizontalBar.left;
+    const el = scrollAreaRef.current;
+    const clientWidth = el?.clientWidth || 1;
+    const scrollWidth = el?.scrollWidth || 1;
+    function onMove(ev) {
+      const deltaX = ev.clientX - startX;
+      let newLeft = Math.max(0, Math.min(clientWidth - horizontalBar.width, startLeft + deltaX));
+      const scrollLeft = (newLeft / clientWidth) * scrollWidth;
+      if (el) el.scrollLeft = scrollLeft;
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp, { once: true });
+  };
 
   // 拖动竖直滚动条
   const onVerticalBarMouseDown = (e) => {
@@ -340,6 +384,21 @@ function App() {
                 right: 0,
               }}
               onMouseDown={onVerticalBarMouseDown}
+            />
+          </div>
+        )}
+        {/* 悬浮横向滚动条 */}
+        {horizontalBar.visible && (
+          <div className="horizontal-scrollbar">
+            <div
+              className="horizontal-scrollbar-inner"
+              style={{
+                width: horizontalBar.width,
+                left: horizontalBar.left,
+                position: 'absolute',
+                top: 0,
+              }}
+              onMouseDown={onHorizontalBarMouseDown}
             />
           </div>
         )}
