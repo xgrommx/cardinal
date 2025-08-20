@@ -1,52 +1,16 @@
+
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { once, listen } from '@tauri-apps/api/event';
 import { InfiniteLoader, List, AutoSizer } from 'react-virtualized';
 import 'react-virtualized/styles.css';
 import "./App.css";
+import { LRUCache } from "./utils/LRUCache";
+import { formatKB } from "./utils/format";
+import { useScrollbarSync } from "./hooks/useScrollbarSync";
+import { VirtualizedRow } from "./components/VirtualizedRow";
+import { ColumnHeader } from "./components/ColumnHeader";
 
-class LRUCache {
-  constructor(capacity) {
-    this.capacity = capacity;
-    this.cache = new Map();
-  }
-
-  get(key) {
-    if (!this.cache.has(key)) {
-      return undefined;
-    }
-    const value = this.cache.get(key);
-    this.cache.delete(key);
-    this.cache.set(key, value);
-    return value;
-  }
-
-  put(key, value) {
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.capacity) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
-    }
-    this.cache.set(key, value);
-  }
-
-  has(key) {
-    return this.cache.has(key);
-  }
-
-  clear() {
-    this.cache.clear();
-  }
-}
-
-// Format bytes into KB with one decimal place, e.g., 12.3 KB
-function formatKB(bytes) {
-  if (bytes == null) return null;
-  const kb = bytes / 1024;
-  if (!isFinite(kb)) return null;
-  return `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
-}
 
 function App() {
   const [results, setResults] = useState([]);
@@ -58,85 +22,36 @@ function App() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isStatusBarVisible, setIsStatusBarVisible] = useState(true);
   const [statusText, setStatusText] = useState("Walking filesystem...");
-  // refs for scrollbars
   const scrollAreaRef = useRef(null);
   const listRef = useRef(null);
   const [verticalBar, setVerticalBar] = useState({ top: 0, height: 0, visible: false });
   const [horizontalBar, setHorizontalBar] = useState({ left: 0, width: 0, visible: false });
 
+  // Status event listeners
   useEffect(() => {
-    listen('status_update', (event) => {
-      setStatusText(event.payload);
-    });
-    once('init_completed', () => {
-      setIsInitialized(true);
-    });
+    listen('status_update', (event) => setStatusText(event.payload));
+    once('init_completed', () => setIsInitialized(true));
   }, []);
 
+  // Status bar fade out
   useEffect(() => {
     if (isInitialized) {
-      const timer = setTimeout(() => {
-        setIsStatusBarVisible(false);
-      }, 2000);
+      const timer = setTimeout(() => setIsStatusBarVisible(false), 2000);
       return () => clearTimeout(timer);
     }
   }, [isInitialized]);
 
+  // Reset InfiniteLoader cache on results change
   useEffect(() => {
     if (infiniteLoaderRef.current) {
       infiniteLoaderRef.current.resetLoadMoreRowsCache(true);
     }
   }, [results]);
 
-  // 竖直/横向滚动条同步逻辑
-  useEffect(() => {
-    function updateVerticalBar() {
-      if (!listRef.current || !scrollAreaRef.current) return;
-      const grid = listRef.current.Grid || listRef.current;
-      const totalRows = results.length;
-      const rowHeight = 24;
-      const visibleHeight = grid.props.height;
-      const totalHeight = totalRows * rowHeight;
-      const scrollTop = grid.state ? grid.state.scrollTop : 0;
-      if (totalHeight <= visibleHeight) {
-        setVerticalBar({ top: 0, height: 0, visible: false });
-        return;
-      }
-      const barHeight = Math.max(32, visibleHeight * visibleHeight / totalHeight);
-      const barTop = (scrollTop / totalHeight) * visibleHeight;
-      setVerticalBar({ top: barTop, height: barHeight, visible: true });
-    }
-    function updateHorizontalBar() {
-      if (!scrollAreaRef.current) return;
-      const el = scrollAreaRef.current;
-      const scrollWidth = el.scrollWidth;
-      const clientWidth = el.clientWidth;
-      const scrollLeft = el.scrollLeft;
-      if (scrollWidth <= clientWidth) {
-        setHorizontalBar({ left: 0, width: 0, visible: false });
-        return;
-      }
-      const barWidth = Math.max(32, clientWidth * clientWidth / scrollWidth);
-      const barLeft = (scrollLeft / scrollWidth) * clientWidth;
-      setHorizontalBar({ left: barLeft, width: barWidth, visible: true });
-    }
-    updateVerticalBar();
-    updateHorizontalBar();
-    if (!listRef.current) return;
-    const grid = listRef.current.Grid || listRef.current;
-    const onVScroll = () => updateVerticalBar();
-    grid && grid._scrollingContainer && grid._scrollingContainer.addEventListener('scroll', onVScroll);
-    const el = scrollAreaRef.current;
-    const onHScroll = () => updateHorizontalBar();
-    el && el.addEventListener('scroll', onHScroll);
-    window.addEventListener('resize', updateHorizontalBar);
-    return () => {
-      grid && grid._scrollingContainer && grid._scrollingContainer.removeEventListener('scroll', onVScroll);
-      el && el.removeEventListener('scroll', onHScroll);
-      window.removeEventListener('resize', updateHorizontalBar);
-    };
-  }, [results, colWidths]);
-  // 拖动横向滚动条
+  // 滚动条同步逻辑抽离为hook
+  useScrollbarSync({ listRef, scrollAreaRef, results, colWidths, setVerticalBar, setHorizontalBar });
+
+  // 横向滚动条拖动
   const onHorizontalBarMouseDown = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -159,7 +74,7 @@ function App() {
     window.addEventListener('mouseup', onUp, { once: true });
   };
 
-  // 拖动竖直滚动条
+  // 竖直滚动条拖动
   const onVerticalBarMouseDown = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -186,6 +101,7 @@ function App() {
     window.addEventListener('mouseup', onUp, { once: true });
   };
 
+  // 搜索逻辑
   const handleSearch = async (query) => {
     let searchResults = [];
     if (query.trim() !== '') {
@@ -195,6 +111,7 @@ function App() {
     setResults(searchResults);
   };
 
+  // 搜索输入防抖
   const onQueryChange = (e) => {
     const currentQuery = e.target.value;
     clearTimeout(debounceTimerRef.current);
@@ -203,6 +120,7 @@ function App() {
     }, 300);
   };
 
+  // 列宽拖拽
   const onResizeStart = (key) => (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -226,11 +144,8 @@ function App() {
     document.body.style.cursor = '';
   };
 
-  const isRowLoaded = ({ index }) => {
-    let loaded = lruCache.current.has(index);
-    return loaded;
-  };
-
+  // 虚拟列表加载
+  const isRowLoaded = ({ index }) => lruCache.current.has(index);
   const loadMoreRows = async ({ startIndex, stopIndex }) => {
     let rows = results.slice(startIndex, stopIndex + 1);
     const searchResults = await invoke("get_nodes_info", { results: rows });
@@ -239,60 +154,10 @@ function App() {
     }
   };
 
-  const rowRenderer = ({ key, index, style }) => {
-    const item = lruCache.current.get(index);
-    const path = typeof item === 'string' ? item : item?.path;
-    const mtimeSec =
-      typeof item !== 'string'
-        ? (item?.metadata?.mtime ?? item?.mtime)
-        : undefined;
-    const mtimeText =
-      mtimeSec != null ? new Date(mtimeSec * 1000).toLocaleString() : null;
-    const ctimeSec =
-      typeof item !== 'string'
-        ? (item?.metadata?.ctime ?? item?.ctime)
-        : undefined;
-    const ctimeText =
-      ctimeSec != null ? new Date(ctimeSec * 1000).toLocaleString() : null;
-    const sizeBytes =
-      typeof item !== 'string'
-        ? (item?.metadata?.size ?? item?.size)
-        : undefined;
-    const sizeText = formatKB(sizeBytes);
-    return (
-      <div
-        key={key}
-        style={style}
-        className={`row ${index % 2 === 0 ? 'row-even' : 'row-odd'}`}
-      >
-        {item ? (
-          <div
-            className="columns row-inner"
-            title={path}
-          >
-            <span className="path-text">{path}</span>
-            {mtimeText ? (
-              <span className="mtime-text">{mtimeText}</span>
-            ) : (
-              <span className="mtime-text muted">—</span>
-            )}
-            {ctimeText ? (
-              <span className="ctime-text">{ctimeText}</span>
-            ) : (
-              <span className="ctime-text muted">—</span>
-            )}
-            {sizeText ? (
-              <span className="size-text">{sizeText}</span>
-            ) : (
-              <span className="size-text muted">—</span>
-            )}
-          </div>
-        ) : (
-          <div />
-        )}
-      </div>
-    );
-  };
+  // 行渲染抽离为组件
+  const rowRenderer = ({ key, index, style }) => (
+    <VirtualizedRow key={key} index={index} style={style} item={lruCache.current.get(index)} />
+  );
 
   return (
     <main className="container">
@@ -317,28 +182,8 @@ function App() {
         }}
       >
         {/* 横向滚动区域 */}
-        <div
-          className="scroll-area"
-          ref={scrollAreaRef}
-        >
-          <div className="header-row columns">
-            <span className="path-text header header-cell">
-              Path
-              <span className="col-resizer" onMouseDown={onResizeStart('path')} />
-            </span>
-            <span className="mtime-text header header-cell">
-              Modified
-              <span className="col-resizer" onMouseDown={onResizeStart('modified')} />
-            </span>
-            <span className="ctime-text header header-cell">
-              Created
-              <span className="col-resizer" onMouseDown={onResizeStart('created')} />
-            </span>
-            <span className="size-text header header-cell">
-              Size
-              <span className="col-resizer" onMouseDown={onResizeStart('size')} />
-            </span>
-          </div>
+        <div className="scroll-area" ref={scrollAreaRef}>
+          <ColumnHeader colWidths={colWidths} onResizeStart={onResizeStart} />
           <div style={{ flex: 1, minHeight: 0 }}>
             <InfiniteLoader
               ref={infiniteLoaderRef}
