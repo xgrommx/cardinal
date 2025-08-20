@@ -50,12 +50,17 @@ function formatKB(bytes) {
 
 function App() {
   const [results, setResults] = useState([]);
+  // Column widths in px
+  const [colWidths, setColWidths] = useState({ path: 600, modified: 180, created: 180, size: 120 });
+  const resizingRef = useRef(null); // { key: 'path'|'modified'|'created'|'size', startX, startW }
   const lruCache = useRef(new LRUCache(1000));
   const infiniteLoaderRef = useRef(null);
   const debounceTimerRef = useRef(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isStatusBarVisible, setIsStatusBarVisible] = useState(true);
   const [statusText, setStatusText] = useState("Walking filesystem...");
+  const titlebarScrollRef = useRef(null);
+  const virtualListScrollRef = useRef(null);
 
   useEffect(() => {
     listen('status_update', (event) => {
@@ -83,6 +88,32 @@ function App() {
     }
   }, [results]);
 
+  // Keep title bar and results horizontal scroll in sync
+  useEffect(() => {
+    const headerEl = titlebarScrollRef.current;
+    const bodyEl = virtualListScrollRef.current;
+    if (!headerEl || !bodyEl) return;
+    let syncing = false;
+    const onBodyScroll = () => {
+      if (syncing) return;
+      syncing = true;
+      headerEl.scrollLeft = bodyEl.scrollLeft;
+      syncing = false;
+    };
+    const onHeaderScroll = () => {
+      if (syncing) return;
+      syncing = true;
+      bodyEl.scrollLeft = headerEl.scrollLeft;
+      syncing = false;
+    };
+    bodyEl.addEventListener('scroll', onBodyScroll);
+    headerEl.addEventListener('scroll', onHeaderScroll);
+    return () => {
+      bodyEl.removeEventListener('scroll', onBodyScroll);
+      headerEl.removeEventListener('scroll', onHeaderScroll);
+    };
+  }, [results, colWidths]);
+
   const handleSearch = async (query) => {
     // console.log("handleSearch", query);
     let searchResults = [];
@@ -100,6 +131,30 @@ function App() {
     debounceTimerRef.current = setTimeout(() => {
       handleSearch(currentQuery);
     }, 300);
+  };
+
+  // Column resizing handlers
+  const onResizeStart = (key) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = { key, startX: e.clientX, startW: colWidths[key] };
+    window.addEventListener('mousemove', onResizing);
+    window.addEventListener('mouseup', onResizeEnd, { once: true });
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  };
+  const onResizing = (e) => {
+    const ctx = resizingRef.current;
+    if (!ctx) return;
+    const delta = e.clientX - ctx.startX;
+    const nextW = Math.max(80, Math.min(1200, ctx.startW + delta));
+    setColWidths((w) => ({ ...w, [ctx.key]: nextW }));
+  };
+  const onResizeEnd = () => {
+    resizingRef.current = null;
+    window.removeEventListener('mousemove', onResizing);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
   };
 
   const isRowLoaded = ({ index }) => {
@@ -141,9 +196,16 @@ function App() {
         : undefined;
     const sizeText = formatKB(sizeBytes);
     return (
-      <div key={key} style={style} className="row columns">
+      <div
+        key={key}
+        style={style}
+        className={`row ${index % 2 === 0 ? 'row-even' : 'row-odd'}`}
+      >
         {item ? (
-          <div className="row-inner" title={path}>
+          <div
+            className="columns row-inner"
+            title={path}
+          >
             <span className="path-text">{path}</span>
             {mtimeText ? (
               <span className="mtime-text">{mtimeText}</span>
@@ -162,7 +224,7 @@ function App() {
             )}
           </div>
         ) : (
-          <div/>
+          <div />
         )}
       </div>
     );
@@ -181,36 +243,76 @@ function App() {
           autoCapitalize="off"
         />
       </div>
-      <div className="results-container" style={{ flex: 1 }}>
-        <div className="header-row columns">
-          <span className="path-text header">Path</span>
-          <span className="mtime-text header">Modified</span>
-          <span className="ctime-text header">Created</span>
-          <span className="size-text header">Size</span>
+      {/* Title Bar (middle) */}
+      <div
+        className="titlebar-container"
+        style={{
+          ['--w-path']: `${colWidths.path}px`,
+          ['--w-modified']: `${colWidths.modified}px`,
+          ['--w-created']: `${colWidths.created}px`,
+          ['--w-size']: `${colWidths.size}px`,
+        }}
+      >
+        <div className="titlebar-scroll" ref={titlebarScrollRef}>
+          <div className="header-row columns">
+            <span className="path-text header header-cell">
+              Path
+              <span className="col-resizer" onMouseDown={onResizeStart('path')} />
+            </span>
+            <span className="mtime-text header header-cell">
+              Modified
+              <span className="col-resizer" onMouseDown={onResizeStart('modified')} />
+            </span>
+            <span className="ctime-text header header-cell">
+              Created
+              <span className="col-resizer" onMouseDown={onResizeStart('created')} />
+            </span>
+            <span className="size-text header header-cell">
+              Size
+              <span className="col-resizer" onMouseDown={onResizeStart('size')} />
+            </span>
+          </div>
         </div>
-        <div className="virtual-list" style={{ flex: 1 }}>
-        <InfiniteLoader
-          ref={infiniteLoaderRef}
-          isRowLoaded={isRowLoaded}
-          loadMoreRows={loadMoreRows}
-          rowCount={results.length}
-        >
-          {({ onRowsRendered, registerChild }) => (
-            <AutoSizer>
-              {({ height, width }) => (
-                <List
-                  ref={registerChild}
-                  onRowsRendered={onRowsRendered}
-                  width={width}
-                  height={height}
-                  rowCount={results.length}
-                  rowHeight={30}
-                  rowRenderer={rowRenderer}
-                />
-              )}
-            </AutoSizer>
-          )}
-        </InfiniteLoader>
+      </div>
+
+      {/* Results (bottom) */}
+      <div
+        className="results-container"
+        style={{
+          ['--w-path']: `${colWidths.path}px`,
+          ['--w-modified']: `${colWidths.modified}px`,
+          ['--w-created']: `${colWidths.created}px`,
+          ['--w-size']: `${colWidths.size}px`,
+        }}
+      >
+        <div className="virtual-list" ref={virtualListScrollRef}>
+          <InfiniteLoader
+            ref={infiniteLoaderRef}
+            isRowLoaded={isRowLoaded}
+            loadMoreRows={loadMoreRows}
+            rowCount={results.length}
+          >
+            {({ onRowsRendered, registerChild }) => (
+              <AutoSizer>
+                {({ height, width }) => {
+                  const colGap = 12; // keep in sync with CSS --col-gap
+                  const columnsTotal =
+                    colWidths.path + colWidths.modified + colWidths.created + colWidths.size + (3 * colGap) + 20; // + paddings
+                  return (
+                  <List
+                    ref={registerChild}
+                    onRowsRendered={onRowsRendered}
+                    width={Math.max(width, columnsTotal)}
+                    height={height}
+                    rowCount={results.length}
+                    rowHeight={24}
+                    rowRenderer={rowRenderer}
+                  />
+                  );
+                }}
+              </AutoSizer>
+            )}
+          </InfiniteLoader>
         </div>
       </div>
       {isStatusBarVisible && (

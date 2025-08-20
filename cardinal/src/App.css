@@ -1,25 +1,59 @@
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
-}
+/* === Base & Theme Tokens === */
 
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "San Francisco", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 14px;
   line-height: 24px;
   font-weight: 400;
 
-  color: #212529; /* 调整为更柔和的黑色文本 */
-  background-color: #ffffff; /* 使用纯白背景以增强对比度 */
+  --color-text: #212529;
+  --color-bg: #ffffff;
+  --color-muted: #6c757d;
+  --color-header: #495057;
+  --color-border: #dee2e6;
+  --color-elevated-bg: #f8f9fa;
+  --color-elevated-border: #dee2e6;
+  --color-resizer: #dee2e6;
+  --color-accent: #0d6efd;
+  --row-even: #ffffff;
+  --row-odd: #f7f8fa;
+  --row-hover: #eef2f7;
 
+  color: var(--color-text);
+  background-color: var(--color-bg);
+
+  /* Rendering */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+/* === Global Resets === */
+/* Prevent window-level rubber-band bounce; only inner containers scroll */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  font-family: var(--font-sans);
+}
+
+/* Apply globally: disable scroll chaining and rubber-band overscroll */
+*,
+*::before,
+*::after {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
+}
+
+/* === Layout: App Container === */
+#root,
+main,
+.container {
+  height: 100%;
 }
 
 .container {
@@ -28,74 +62,26 @@
   display: flex;
   flex-direction: column;
   text-align: center;
-  height: 100vh; /* Make container fill the viewport height */
+  height: 100vh;
+  /* Make container fill the viewport height */
   box-sizing: border-box;
+  gap: 0.25rem;
 }
 
+/* === Search Bar === */
 .search-container {
   display: flex;
   justify-content: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.25rem;
 }
 
 #search-input {
   width: 100%;
+  overflow: hidden;
+  /* ensure search bar area cannot overflow */
 }
 
-.results-container {
-  text-align: left;
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  overflow-y: auto; /* 保留整体垂直滚动 */
-}
-
-.columns {
-  display: grid;
-  grid-template-columns: 1fr 180px 180px 120px; /* path | modified | created | size */
-  column-gap: 12px;
-  align-items: center;
-}
-
-.row {
-  padding: 5px 10px;
-  border-bottom: 1px solid #dee2e6;
-  box-sizing: border-box;
-  white-space: nowrap; /* 防止文本换行 */
-  overflow: hidden; /* 隐藏溢出 */
-}
-
-.row-inner { display: contents; } /* so children align to the grid defined on parent */
-
-.path-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-
-.mtime-text {
-  color: #6c757d;
-  font-size: 0.9em;
-}
-
-.mtime-text.muted {
-  opacity: 0.6;
-}
-
-.ctime-text { color: #6c757d; font-size: 0.9em; }
-.size-text { color: #6c757d; font-size: 0.9em; text-align: right; }
-.header-row {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: inherit;
-  padding: 6px 10px;
-  border-bottom: 1px solid #dee2e6;
-}
-.header { font-weight: 600; color: #495057; }
-
-.virtual-list { height: calc(100% - 40px); }
-
-.ctime-text.muted {
-  opacity: 0.6;
-}
-
+/* Inputs and buttons (used in search area) */
 input,
 button {
   border-radius: 8px;
@@ -104,10 +90,13 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  color: #212529;
-  background-color: #f8f9fa; /* 统一输入框和按钮背景色 */
+  color: var(--color-text);
+  background-color: var(--color-elevated-bg);
+  /* 统一输入框和按钮背景色 */
   transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.05); /* 减淡阴影 */
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.05);
+  /* 减淡阴影 */
+  outline: none;
 }
 
 button {
@@ -115,30 +104,197 @@ button {
 }
 
 button:hover {
-  border-color: #007bff; /* 设置统一的悬停高亮色 */
+  border-color: var(--color-accent);
 }
 
 button:active {
-  border-color: #007bff;
+  border-color: var(--color-accent);
   background-color: #e9ecef;
 }
 
-input,
-button {
-  outline: none;
+/* === Results Area === */
+.results-container {
+  text-align: left;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  /* vertical scroll for results */
+  overflow-x: auto;
+  /* horizontal scroll synced with title bar */
+  /* Column layout tokens */
+  --col-gap: 12px;
+  /* 3 gaps + 10px left + 10px right padding = 20px */
+  --columns-total: calc(var(--w-path, 600px) + var(--w-modified, 180px) + var(--w-created, 180px) + var(--w-size, 120px) + (3 * var(--col-gap)) + 20px);
 }
 
+/* Title bar wrapper above results; allows horizontal overflow */
+.titlebar-container {
+  text-align: left;
+  width: 100%;
+  overflow: hidden;
+  /* contains the inner scroller */
+  /* Column layout tokens (mirror results-container) */
+  --col-gap: 12px;
+  --columns-total: calc(var(--w-path, 600px) + var(--w-modified, 180px) + var(--w-created, 180px) + var(--w-size, 120px) + (3 * var(--col-gap)) + 20px);
+}
+
+.titlebar-scroll {
+  overflow-x: auto;
+  /* allow horizontal overflow for headers */
+  overflow-y: hidden;
+}
+
+/* === Columns (Grid) === */
+.columns {
+  display: grid;
+  grid-template-columns: var(--w-path, 600px) var(--w-modified, 180px) var(--w-created, 180px) var(--w-size, 120px);
+  column-gap: var(--col-gap);
+  align-items: center;
+  /* Mirror previous JS total width: 3 gaps * 12px + horizontal padding (10px left + 10px right) */
+  width: var(--columns-total);
+  min-width: var(--columns-total);
+}
+
+/* Row and cell styles are moved below header/virtual list for logical order */
+
+/* === Header Row === */
+.header-row {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: inherit;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.header {
+  font-weight: 600;
+  color: var(--color-header);
+}
+
+.header-cell {
+  position: relative;
+  padding-right: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-resizer {
+  position: absolute;
+  right: -6px;
+  top: 0;
+  width: 12px;
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+}
+
+.col-resizer::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 15%;
+  bottom: 15%;
+  width: 1px;
+  height: 100%;
+  transform: translateX(-0.5px);
+  background-color: var(--color-resizer);
+  /* resizer line color */
+  opacity: 0.95;
+  transition: background-color 0.15s ease, width 0.1s ease, opacity 0.15s ease;
+}
+
+.col-resizer:hover::before {
+  width: 2px;
+  background-color: var(--color-accent);
+  /* accent on hover */
+}
+
+/* === Virtual List === */
+.virtual-list {
+  height: 100%;
+  overflow-x: auto;
+  flex: 1;
+}
+
+/* Let wrapper control horizontal scroll; List keeps vertical scroll only */
+.ReactVirtualized__Grid {
+  overflow-x: visible !important;
+  overflow-y: auto !important;
+}
+
+/* Rows (rendered inside virtual list) */
+/* === Rows & Cells === */
+.row {
+  padding: 5px 10px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  /* 防止文本换行 */
+  overflow: hidden;
+  /* 隐藏溢出 */
+  background-color: var(--row-even);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.row-odd {
+  background-color: var(--row-odd);
+}
+
+.row-even {
+  background-color: var(--row-even);
+}
+
+.row:hover {
+  background-color: var(--row-hover);
+}
+
+/* .row-inner kept as a semantic hook via markup; styling comes from .columns */
+
+.path-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Common meta cell styles */
+.mtime-text,
+.ctime-text,
+.size-text {
+  color: var(--color-muted);
+  font-size: 0.9em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.size-text {
+  text-align: right;
+}
+
+/* Utility */
+.muted {
+  opacity: 0.6;
+}
+
+/* === Status Bar === */
 .status-bar {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   padding: 8px;
-  background-color: #f8f9fa;
+  background-color: var(--color-elevated-bg);
   text-align: center;
   font-size: 0.9em;
-  color: #6c757d; /* 使用更柔和的文本颜色 */
-  border-top: 1px solid #dee2e6;
+  color: var(--color-muted);
+  /* 使用更柔和的文本颜色 */
+  border-top: 1px solid var(--color-border);
   transition: transform 0.5s ease-in-out;
 }
 
@@ -146,6 +302,7 @@ button {
   transform: translateY(100%);
 }
 
+/* === Initializing Overlay === */
 .initializing-container {
   display: flex;
   align-items: center;
@@ -163,49 +320,46 @@ button {
   animation: spin 1s ease infinite;
 }
 
+/* === Animations === */
 @keyframes spin {
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
 }
 
+/* === Dark Mode === */
 @media (prefers-color-scheme: dark) {
   :root {
-    color: #e9ecef; /* 优化暗色模式下的文本颜色 */
-    background-color: #121212; /* 使用更深邃的背景色 */
+    --color-text: #e9ecef;
+    --color-bg: rgb(32, 32, 32);
+    --color-muted: #adb5bd;
+    --color-header: #ced4da;
+    --color-border: #343a40;
+    --color-elevated-bg: #212529;
+    --color-elevated-border: #343a40;
+    --color-resizer: #495057;
+    --color-accent: #0d6efd;
+    --row-even: rgb(32, 32, 32);
+    --row-odd: rgb(43, 43, 42);
+    --row-hover: rgb(70, 70, 70);
   }
-
-  .row {
-    border-bottom: 1px solid #343a40;
-  }
-  .header-row { border-bottom: 1px solid #343a40; }
-  .header { color: #ced4da; }
 
   a:hover {
-    color: #0d6efd; /* 统一暗色模式下的高亮色 */
+    color: var(--color-accent);
   }
 
+  /* Preserve visible borders for inputs/buttons in dark mode */
   input,
   button {
-    color: #e9ecef;
-    background-color: #212529;
-    border: 1px solid #343a40;
+    border: 1px solid var(--color-elevated-border);
   }
 
-  button:hover {
-    border-color: #0d6efd;
-  }
-
+  /* Preserve dark active background */
   button:active {
     background-color: #343a40;
-  }
-
-  .status-bar {
-    background-color: #212529;
-    color: #adb5bd;
-    border-top: 1px solid #343a40;
   }
 }
