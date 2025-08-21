@@ -1,8 +1,12 @@
 import { useState, useRef, useCallback } from 'react';
-import { DEFAULT_COL_WIDTHS } from '../constants';
+import { calculateInitialColWidths, MAX_COL_WIDTH, MIN_COL_WIDTH } from '../constants';
 
 export function useColumnResize() {
-  const [colWidths, setColWidths] = useState(DEFAULT_COL_WIDTHS);
+  const [colWidths, setColWidths] = useState(() => {
+    // 初始化时根据窗口宽度计算列宽
+    const windowWidth = window.innerWidth;
+    return calculateInitialColWidths(windowWidth);
+  });
   const resizingRef = useRef(null);
 
   const onResizeStart = useCallback((key) => (e) => {
@@ -27,9 +31,8 @@ export function useColumnResize() {
     if (!ctx) return;
     
     const delta = e.clientX - ctx.startX;
-    const rootStyle = getComputedStyle(document.documentElement);
-    const minW = parseInt(rootStyle.getPropertyValue('--col-min-width')) || 80;
-    const maxW = parseInt(rootStyle.getPropertyValue('--col-max-width')) || 1200;
+    const minW = MIN_COL_WIDTH; // 最小宽度限制
+    const maxW = MAX_COL_WIDTH; // 最大宽度限制
     const nextW = Math.max(minW, Math.min(maxW, ctx.startW + delta));
     
     setColWidths((w) => ({ ...w, [ctx.key]: nextW }));

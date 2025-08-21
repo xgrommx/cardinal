@@ -36,8 +36,9 @@
   --row-height: 24px;                /* 与虚拟列表 rowHeight 同步 */
   --col-gap: 12px;                   /* 列之间的间隙 */
   --columns-extra: 20px;             /* 额外宽度补偿，需与JS columnsTotal 一致 */
-  --col-min-width: 80px;             /* 列宽最小值 */
-  --col-max-width: 1200px;           /* 列宽最大值 */
+  --col-min-width: 30px;             /* 列宽最小值 */
+  --col-max-width: 10000px;          /* 列宽最大值 */
+  --container-padding: 10px;
   /* 去除自定义滚动条相关变量 */
 }
 
@@ -73,7 +74,7 @@ main,
 
 .container {
   margin: 0;
-  padding: 0.6rem;
+  padding: var(--container-padding);
   display: flex;
   flex-direction: column;
   text-align: center;
