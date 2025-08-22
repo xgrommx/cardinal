@@ -30,6 +30,7 @@ export function useAppState() {
 
 export function useSearch(setResults, lruCache) {
   const debounceTimerRef = useRef(null);
+  const [currentQuery, setCurrentQuery] = useState('');
 
   const handleSearch = useCallback(async (query) => {
     let searchResults = [];
@@ -38,6 +39,7 @@ export function useSearch(setResults, lruCache) {
     }
     lruCache.current.clear();
     setResults(searchResults);
+    setCurrentQuery(query.trim());
   }, [setResults, lruCache]);
 
   const onQueryChange = useCallback((e) => {
@@ -48,7 +50,7 @@ export function useSearch(setResults, lruCache) {
     }, SEARCH_DEBOUNCE_MS);
   }, [handleSearch]);
 
-  return { onQueryChange };
+  return { onQueryChange, currentQuery };
 }
 
 export function useVirtualizedList(results) {

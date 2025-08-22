@@ -17,7 +17,7 @@ function App() {
   const { lruCache, infiniteLoaderRef, isCellLoaded, loadMoreRows } = useVirtualizedList(results);
   const { contextMenu, showContextMenu, closeContextMenu, menuItems } = useContextMenu();
   const { headerContextMenu, showHeaderContextMenu, closeHeaderContextMenu, headerMenuItems } = useHeaderContextMenu(autoFitColumns);
-  const { onQueryChange } = useSearch(setResults, lruCache);
+  const { onQueryChange, currentQuery } = useSearch(setResults, lruCache);
   
   const headerRef = useRef(null);
   const listRef = useRef(null);
@@ -51,6 +51,7 @@ function App() {
         rowIndex={rowIndex}
         style={style}
         onContextMenu={showContextMenu}
+        searchQuery={currentQuery}
       />
     );
   };

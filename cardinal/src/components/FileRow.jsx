@@ -1,8 +1,8 @@
 import React from 'react';
-import { MiddleEllipsis } from './MiddleEllipsis';
+import { MiddleEllipsisHighlight } from './MiddleEllipsisHighlight';
 import { formatKB } from '../utils/format';
 
-export function FileRow({ item, rowIndex, style, onContextMenu }) {
+export function FileRow({ item, rowIndex, style, onContextMenu, searchQuery }) {
   if (!item) {
     return <div key={`empty-${rowIndex}`} style={style} />;
   }
@@ -33,8 +33,8 @@ export function FileRow({ item, rowIndex, style, onContextMenu }) {
       onContextMenu={handleContextMenu}
     >
       <div className="columns row-inner" title={path}>
-        <MiddleEllipsis className="filename-text" text={filename} />
-        <MiddleEllipsis className="path-text" text={path} />
+        <MiddleEllipsisHighlight className="filename-text" text={filename} searchQuery={searchQuery} />
+        <MiddleEllipsisHighlight className="path-text" text={path} searchQuery={searchQuery} />
         <span className={`size-text ${!sizeText ? 'muted' : ''}`}>
           {sizeText || '—'}
         </span>
