@@ -5,7 +5,7 @@ use cardinal_sdk::EventWatcher;
 use clap::Parser;
 use cli::Cli;
 use crossbeam_channel::{Sender, bounded, unbounded};
-use search_cache::{HandleFSEError, SearchCache, SearchNode};
+use search_cache::{HandleFSEError, SearchCache, SearchResultNode};
 use std::{io::Write, path::Path};
 use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 
@@ -36,7 +36,7 @@ fn main() -> Result<()> {
 
     let (finish_tx, finish_rx) = bounded::<Sender<SearchCache>>(1);
     let (search_tx, search_rx) = unbounded::<String>();
-    let (search_result_tx, search_result_rx) = unbounded::<Result<Vec<SearchNode>>>();
+    let (search_result_tx, search_result_rx) = unbounded::<Result<Vec<SearchResultNode>>>();
 
     std::thread::spawn(move || {
         let mut event_watcher = EventWatcher::spawn("/".to_string(), cache.last_event_id(), 0.1);
