@@ -422,6 +422,7 @@ dependencies = [
  "cardinal-sdk",
  "crossbeam-channel",
  "directories",
+ "fswalk",
  "search-cache",
  "serde",
  "serde_json",

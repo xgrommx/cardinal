@@ -3,7 +3,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use bincode::{Decode, Encode};
 use cardinal_sdk::{current_event_id, EventFlag, FsEvent, ScanType};
 pub use fswalk::WalkData;
-use fswalk::{walk_it, Node, NodeFileType, NodeMetadata};
+use fswalk::{walk_it, Node, NodeMetadata};
 use namepool::NamePool;
 use query_segmentation::{query_segmentation, Segment};
 use serde::{Deserialize, Serialize};
@@ -23,33 +23,7 @@ pub struct SlabNode {
     parent: Option<usize>,
     children: Vec<usize>,
     name: String,
-    metadata: Option<SlabNodeMetadata>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone, Copy)]
-pub struct SlabNodeMetadata {
-    pub r#type: NodeFileType,
-    pub ctime: Option<u64>,
-    pub mtime: Option<u64>,
-    pub size: u64,
-}
-
-impl SlabNodeMetadata {
-    fn new(
-        &NodeMetadata {
-            r#type,
-            ctime,
-            mtime,
-            size,
-        }: &NodeMetadata,
-    ) -> Self {
-        Self {
-            r#type,
-            ctime,
-            mtime,
-            size,
-        }
-    }
+    metadata: Option<NodeMetadata>,
 }
 
 pub struct SearchCache {
@@ -76,7 +50,7 @@ impl std::fmt::Debug for SearchCache {
 #[derive(Debug)]
 pub struct SearchNode {
     pub path: PathBuf,
-    pub metadata: Option<SlabNodeMetadata>,
+    pub metadata: Option<NodeMetadata>,
 }
 
 impl SearchCache {
@@ -499,9 +473,7 @@ impl SearchCache {
                             // try fetching metadata if it's not cached and cache them
                             let metadata = std::fs::metadata(path)
                                 .ok()
-                                .map(NodeMetadata::from)
-                                .as_ref()
-                                .map(SlabNodeMetadata::new);
+                                .map(NodeMetadata::from);
                             node.metadata = metadata;
                             metadata
                         } else {
@@ -609,7 +581,7 @@ fn construct_node_slab(parent: Option<usize>, node: &Node, slab: &mut Slab<SlabN
         parent,
         children: vec![],
         name: node.name.clone(),
-        metadata: node.metadata.as_ref().map(SlabNodeMetadata::new),
+        metadata: node.metadata.clone(),
     };
     let index = slab.insert(slab_node);
     slab[index].children = node
@@ -632,7 +604,7 @@ fn create_node_slab_update_name_index_and_name_pool(
         parent,
         children: vec![],
         name: node.name.clone(),
-        metadata: node.metadata.as_ref().map(SlabNodeMetadata::new),
+        metadata: node.metadata.clone(),
     };
     let index = slab.insert(slab_node);
     if let Some(indexes) = name_index.get_mut(&node.name) {

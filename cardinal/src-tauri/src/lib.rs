@@ -2,7 +2,8 @@
 use anyhow::{Context, Result};
 use cardinal_sdk::{EventFlag, EventWatcher};
 use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
-use search_cache::{HandleFSEError, SearchCache, SearchNode, SlabNodeMetadata, WalkData};
+use fswalk::NodeMetadata;
+use search_cache::{HandleFSEError, SearchCache, SearchNode, WalkData};
 use serde::Serialize;
 use std::{
     cell::LazyCell,
@@ -56,7 +57,7 @@ async fn search(query: String, state: State<'_, SearchState>) -> Result<Vec<usiz
 #[derive(Serialize)]
 struct NodeInfo {
     path: String,
-    metadata: Option<SlabNodeMetadata>,
+    metadata: Option<NodeMetadata>,
 }
 
 #[derive(Serialize, Clone)]
