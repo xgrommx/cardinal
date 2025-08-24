@@ -1,5 +1,5 @@
-use bincode::{Decode, Encode};
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, ffi::CStr};
 
 fn get_parallelism() -> usize {
@@ -8,7 +8,7 @@ fn get_parallelism() -> usize {
         .min(32)
 }
 
-#[derive(Encode, Decode)]
+#[derive(Serialize, Deserialize)]
 pub struct NamePool {
     // e.g. `\0aaa\0bbb\0ccc\0`
     // \0 is used as a separator

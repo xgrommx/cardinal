@@ -1,6 +1,6 @@
 use crate::{cache::SlabNode, MetadataCache};
 use anyhow::{Context, Result};
-use bincode::{config::Configuration, Decode, Encode};
+use serde::{Deserialize, Serialize};
 use slab::Slab;
 use std::{
     collections::BTreeMap,
@@ -15,7 +15,7 @@ use typed_num::Num;
 
 const LSF_VERSION: i64 = 1;
 
-#[derive(Encode, Decode)]
+#[derive(Serialize, Deserialize)]
 pub struct PersistentStorage {
     pub version: Num<LSF_VERSION>,
     /// The last event id of the cache.
@@ -29,15 +29,15 @@ pub struct PersistentStorage {
     pub metadata_cache: MetadataCache,
 }
 
-const BINCODE_CONDFIG: Configuration = bincode::config::standard();
-
 pub fn read_cache_from_file(path: &Path) -> Result<PersistentStorage> {
     let cache_decode_time = Instant::now();
+    let mut bytes = vec![0u8; 4 * 1024];
     let input = File::open(path).context("Failed to open cache file")?;
     let input = zstd::Decoder::new(input).context("Failed to create zstd decoder")?;
     let mut input = BufReader::new(input);
-    let storage: PersistentStorage = bincode::decode_from_std_read(&mut input, BINCODE_CONDFIG)
-        .context("Failed to decode cache")?;
+    let storage: PersistentStorage = postcard::from_io((&mut input, &mut bytes))
+        .context("Failed to decode cache, maybe the cache is corrupted")?
+        .0;
     info!("Cache decode time: {:?}", cache_decode_time.elapsed());
     Ok(storage)
 }
@@ -54,12 +54,7 @@ pub fn write_cache_to_file(path: &Path, storage: PersistentStorage) -> Result<()
             .context("Failed to create parallel zstd encoder")?;
         let output = output.auto_finish();
         let mut output = BufWriter::new(output);
-        bincode::encode_into_std_write(
-            &storage, // 使用传入的 storage
-            &mut output,
-            BINCODE_CONDFIG,
-        )
-        .context("Failed to encode cache")?;
+        postcard::to_io(&storage, &mut output).context("Failed to encode cache")?;
     }
     fs::rename(tmp_path, path).context("Failed to rename cache file")?;
     info!("Cache encode time: {:?}", cache_encode_time.elapsed());

@@ -1,6 +1,5 @@
 use crate::persistent::{read_cache_from_file, write_cache_to_file, PersistentStorage};
 use anyhow::{anyhow, bail, Context, Result};
-use bincode::{Decode, Encode};
 use cardinal_sdk::{current_event_id, EventFlag, FsEvent, ScanType};
 pub use fswalk::WalkData;
 use fswalk::{walk_it, Node, NodeMetadata};
@@ -22,7 +21,7 @@ use std::{
 use tracing::{debug, info};
 use typed_num::Num;
 
-#[derive(Debug, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SlabNode {
     parent: Option<usize>,
     children: Vec<usize>,
@@ -38,7 +37,7 @@ impl SlabNode {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum SlabNodeMetadata {
     Unaccessible,
     Some(NodeMetadata),
@@ -673,7 +672,7 @@ pub enum ReplenishResult {
     Finished,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Serialize, Deserialize)]
 pub struct MetadataCache {
     ctime_index: BTreeMap<u64, Vec<usize>>,
     mtime_index: BTreeMap<u64, Vec<usize>>,

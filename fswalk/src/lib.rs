@@ -1,4 +1,3 @@
-use bincode::{Decode, Encode};
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -10,7 +9,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-#[derive(Serialize, Encode, Debug)]
+#[derive(Serialize, Debug)]
 pub struct Node {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<Node>,
@@ -18,7 +17,7 @@ pub struct Node {
     pub metadata: Option<NodeMetadata>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct NodeMetadata {
     pub r#type: NodeFileType,
     pub ctime: Option<u64>,
@@ -55,7 +54,7 @@ impl NodeMetadata {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Encode, Decode, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 #[repr(u8)]
 pub enum NodeFileType {
     // File occurs a lot, assign it to 0 for better compression ratio(I guess... maybe useful).
