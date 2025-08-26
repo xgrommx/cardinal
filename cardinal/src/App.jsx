@@ -9,6 +9,7 @@ import { useColumnResize } from './hooks/useColumnResize';
 import { useContextMenu } from './hooks/useContextMenu';
 import { ROW_HEIGHT, OVERSCAN_ROW_COUNT } from './constants';
 import { VirtualList } from './components/VirtualList';
+import { StateDisplay } from './components/StateDisplay';
 
 function App() {
   const { results, setResults, isInitialized, scannedFiles, processedEvents } = useAppState();
@@ -18,7 +19,7 @@ function App() {
     contextMenu, showContextMenu, closeContextMenu, menuItems,
     headerContextMenu, showHeaderContextMenu, closeHeaderContextMenu, headerMenuItems
   } = useContextMenu(autoFitColumns);
-  const { onQueryChange, currentQuery, showLoadingUI, initialFetchCompleted, durationMs, resultCount } = useSearch(setResults);
+  const { onQueryChange, currentQuery, showLoadingUI, initialFetchCompleted, durationMs, resultCount, searchError } = useSearch(setResults);
 
   const headerRef = useRef(null);
   const scrollAreaRef = useRef(null);
@@ -69,6 +70,15 @@ function App() {
     );
   };
 
+  const getDisplayState = () => {
+    if (showLoadingUI || !initialFetchCompleted) return 'loading';
+    if (searchError) return 'error';
+    if (results.length === 0) return 'empty';
+    return 'results';
+  };
+
+  const displayState = getDisplayState();
+
   return (
     <main className="container">
       <div className="search-container">
@@ -99,14 +109,8 @@ function App() {
             onContextMenu={showHeaderContextMenu}
           />
           <div className="flex-fill">
-            {/* 当搜索中且显示loading UI时，显示搜索占位符 */}
-            {showLoadingUI || !initialFetchCompleted ? (
-              <div className="search-placeholder">
-                <div className="search-placeholder-content">
-                  <div className="search-spinner"></div>
-                  <span>Searching...</span>
-                </div>
-              </div>
+            {displayState !== 'results' ? (
+              <StateDisplay state={displayState} message={searchError} query={currentQuery} />
             ) : (
               <VirtualList
                 ref={virtualListRef}
@@ -117,7 +121,6 @@ function App() {
                 onRangeChange={ensureRangeLoaded}
                 onScrollSync={handleHorizontalSync}
                 className="virtual-list"
-                showEmptyState={initialFetchCompleted && !showLoadingUI}
               />
             )}
           </div>

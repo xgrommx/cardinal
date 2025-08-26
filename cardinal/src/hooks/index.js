@@ -36,10 +36,12 @@ export function useSearch(setResults) {
   const [initialFetchCompleted, setInitialFetchCompleted] = useState(false);
   const [durationMs, setDurationMs] = useState(null);
   const [resultCount, setResultCount] = useState(0);
+  const [searchError, setSearchError] = useState(null);
 
   const handleSearch = useCallback(async (query) => {
     const startTs = performance.now();
     const isInitial = !hasInitialSearchRun;
+    setSearchError(null);
     // 初始搜索立即进入 loading；后续搜索使用延迟避免闪烁
     if (isInitial) {
       setShowLoadingUI(true);
@@ -70,6 +72,11 @@ export function useSearch(setResults) {
       setResultCount(Array.isArray(searchResults) ? searchResults.length : 0);
     } catch (error) {
       console.error('Search failed:', error);
+      if (loadingDelayTimerRef.current) {
+        clearTimeout(loadingDelayTimerRef.current);
+        loadingDelayTimerRef.current = null;
+      }
+      setSearchError(error || 'An unknown error occurred.');
       setShowLoadingUI(false);
       if (!initialFetchCompleted) setInitialFetchCompleted(true); // 即使失败也结束初始加载状态
 
@@ -109,7 +116,7 @@ export function useSearch(setResults) {
     };
   }, []);
 
-  return { onQueryChange, currentQuery, showLoadingUI, initialFetchCompleted, durationMs, resultCount };
+  return { onQueryChange, currentQuery, showLoadingUI, initialFetchCompleted, durationMs, resultCount, searchError };
 }
 
 export { useRowData } from './useRowData';

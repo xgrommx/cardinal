@@ -21,8 +21,7 @@ export const VirtualList = forwardRef(function VirtualList({
 	renderRow,
 	onRangeChange,
 	onScrollSync,
-	className = '',
-	showEmptyState = true
+	className = ''
 }, ref) {
 	const scrollRef = useRef(null);
 	const lastScrollLeftRef = useRef(0);
@@ -146,27 +145,6 @@ export const VirtualList = forwardRef(function VirtualList({
 					{items}
 				</div>
 			</div>
-			{showEmptyState && rowCount === 0 && (
-				<div className="empty-state">
-					<div className="empty-icon" aria-hidden="true">
-						<svg width="72" height="72" viewBox="0 0 72 72" fill="none" stroke="currentColor" strokeWidth="1.5">
-							<circle cx="32" cy="32" r="18" strokeOpacity="0.5" />
-							<path d="M45 45 L60 60" strokeLinecap="round" />
-							<circle cx="24" cy="30" r="2" fill="currentColor" />
-							<circle cx="32" cy="30" r="2" fill="currentColor" />
-							<circle cx="40" cy="30" r="2" fill="currentColor" />
-							<path d="M25 38 Q32 44 39 38" strokeLinecap="round" strokeLinejoin="round" />
-						</svg>
-					</div>
-					<div className="empty-title">No Results</div>
-					<div className="empty-desc">Try adjusting your keywords or filters.</div>
-					<ul className="empty-tips">
-						<li>Use more specific terms (e.g. src/components)</li>
-						<li>Search partial names: part of filename/path</li>
-						<li>Case-insensitive by default</li>
-					</ul>
-				</div>
-			)}
 		</div>
 	);
 });
