@@ -46,20 +46,34 @@ export const VirtualList = forwardRef(function VirtualList({
 		const el = scrollRef.current;
 		const next = computeRange(el);
 		setRange(prev => {
+			// 1. 如果计算出的新范围与当前范围相同，则不执行任何操作以避免不必要的重新渲染。
+			// 这是性能优化的关键。
 			if (prev.start === next.start && prev.end === next.end) return prev;
+
+			// 2. 如果范围确实发生了变化，则触发 onRangeChange 回调。
+			// 此回调通常用于父组件，以预先加载新可见范围内项目的数据。
 			if (onRangeChange && next.end >= next.start && rowCount > 0) {
 				onRangeChange(next.start, next.end);
 			}
+
+			// 3. 返回新的范围对象。
+			// React 的 useState hook 将检测到状态变化（因为返回了一个新的对象引用），
+			// 并安排组件的重新渲染。
 			return next;
 		});
 	}, [computeRange, onRangeChange, rowCount]);
 
 	const handleScroll = useCallback(() => {
+		// 使用 requestAnimationFrame 来对滚动事件进行节流，确保滚动处理函数不会在每一帧中执行超过一次。
+		// 这对于防止性能瓶颈至关重要。
 		if (rafRef.current) cancelAnimationFrame(rafRef.current);
 		rafRef.current = requestAnimationFrame(() => {
+			// 在下一帧更新渲染的范围
 			updateRange();
 			const el = scrollRef.current;
 			if (!el) return;
+
+			// 同步水平滚动位置，通常用于使外部组件（如列头）与列表的滚动同步。
 			const sl = el.scrollLeft;
 			if (onScrollSync && sl !== lastScrollLeftRef.current) {
 				lastScrollLeftRef.current = sl;
@@ -68,13 +82,15 @@ export const VirtualList = forwardRef(function VirtualList({
 		});
 	}, [updateRange, onScrollSync]);
 
-	// Resize observer (height changes)
+	// 当组件挂载或其尺寸发生变化时，使用 ResizeObserver 来更新渲染范围。
+	// 这确保了即使在视口大小动态改变（例如，窗口大小调整）的情况下，列表也能正确显示。
+	// useLayoutEffect 用于在 DOM 更新后同步读取布局信息，防止闪烁。
 	useLayoutEffect(() => {
 		const el = scrollRef.current;
 		if (!el) return;
 		const ro = new ResizeObserver(() => updateRange());
 		ro.observe(el);
-		updateRange();
+		updateRange(); // Initial update
 		return () => ro.disconnect();
 	}, [rowCount, rowHeight, updateRange]);
 
