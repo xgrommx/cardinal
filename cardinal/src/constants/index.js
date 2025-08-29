@@ -13,14 +13,14 @@ export const COL_WIDTH_RATIOS = {
 export const calculateInitialColWidths = (windowWidth) => {
   // 使用常量滚动条宽度（需与 CSS 中的 --virtual-scrollbar-width 保持一致）
   const availableWidth = windowWidth - (Object.keys(COL_WIDTH_RATIOS).length - 1) * COL_GAP - COLUMNS_EXTRA - CONTAINER_PADDING - SCROLLBAR_WIDTH;
-  
+
   const calculatedWidths = {};
-  
+
   for (const [key, ratio] of Object.entries(COL_WIDTH_RATIOS)) {
     const calculatedWidth = Math.floor(availableWidth * ratio);
     calculatedWidths[key] = Math.max(calculatedWidth, MIN_COL_WIDTH);
   }
-  
+
   return calculatedWidths;
 };
 
