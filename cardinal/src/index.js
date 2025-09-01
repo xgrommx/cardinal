@@ -4,7 +4,6 @@ export { default as App } from './App';
 export { ColumnHeader } from './components/ColumnHeader';
 export { ContextMenu } from './components/ContextMenu';
 export { FileRow } from './components/FileRow';
-export { MiddleEllipsis } from './components/MiddleEllipsis';
 export { VirtualList } from './components/VirtualList';
 // Hooks
 export { useAppState, useSearch } from './hooks';
