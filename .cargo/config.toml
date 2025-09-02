@@ -1,0 +1,6 @@
+[build]
+rustflags = [
+    "-Csymbol-mangling-version=v0",
+    # https://doc.rust-lang.org/rustc/codegen-options/index.html#split-debuginfo
+    "-Csplit-debuginfo=packed"
+]
