@@ -41,5 +41,5 @@ directories = "6.0.0"
 default = []
 dev = ["tauri/devtools"]
 
-[profile.release]
-strip = false
+# [profile.release]
+# strip = true
