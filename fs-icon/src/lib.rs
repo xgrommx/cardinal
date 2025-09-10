@@ -186,13 +186,13 @@ mod tests {
     }
 
     #[test]
+    #[should_panic = "should fail for non-image file"]
     fn test_icon_of_path_ql_non_image() {
         let pwd = std::env::current_dir()
             .unwrap()
             .to_string_lossy()
             .into_owned();
-        let data = icon_of_path_ql(&pwd).unwrap();
-        std::fs::write("/tmp/icon_ql.png", data).unwrap();
+        icon_of_path_ql(&pwd).expect("should fail for non-image file");
     }
 
     #[test]
