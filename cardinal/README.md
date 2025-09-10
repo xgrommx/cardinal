@@ -37,6 +37,17 @@
 - fs-icon 仍差强人意，目前显示的和 finder 仍然不一致，怀疑Finder用的别的预览 API(QLThumbnailGenerator?)
     + 改成 QLThumbnailGenerator + NSWorkspace 之后仍然和Finder实现不一样，尽力了尽力了
 + 申请 macos 全盘访问权限: https://github.com/ayangweb/tauri-plugin-macos-permissions
++ 内存优化:
+    + 更 Compact 的 SlabNode
+    + APFS 文件名长度最大只有 255 个字节(Linux 文件系统也是)
+        + Vec with u16 capacity + length
+            + capacity + length 都用 u16 表示 24 byte -> 12 byte
+        + 改成用 namepool 变成偏移可以 24 byte -> (usize + u16)10 byte
+        + https://superuser.com/questions/1561484/what-is-the-maximum-length-of-a-filename-apfs
+    + APFS 每个目录下面最多只能有 21 亿个文件 https://superuser.com/questions/845143/any-limitation-for-having-many-files-in-a-directory-in-macos
+        + Vec with u32 capacity + length
+            + capacity + length 都用 u32 表示 24 byte -> 16 byte
+
 
 ```bash
 npm run tauri dev -- --release --features dev
