@@ -22,7 +22,8 @@ impl StateTypeSize {
     }
 
     fn new(state: State, r#type: NodeFileType, size: u64) -> Self {
-        let bytes = (size.min((1 << 44) - 1) | ((r#type as u64) << 44) | ((state as u64) << 46)).to_le_bytes();
+        let bytes = (size.min((1 << 44) - 1) | ((r#type as u64) << 44) | ((state as u64) << 46))
+            .to_le_bytes();
         let mut result = [0u8; 6];
         result.copy_from_slice(&bytes[..6]);
         Self(result)

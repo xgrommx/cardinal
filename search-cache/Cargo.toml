@@ -16,9 +16,8 @@ crossbeam-channel = "0.5.15"
 typed-num = { version = "0.3.0", default-features = false, features = ["serde"] }
 tracing = "0.1"
 postcard = { version = "1", features = ["use-std"] }
-smallvec = { git = "https://github.com/servo/rust-smallvec", branch = "v2", features = ["serde"] }
-serde_repr = "0.1"
 enumn = "0.1"
+thin-vec = { version = "0.2.14", features = ["serde"] }
 
 [dev-dependencies]
 tempdir = "0.3"

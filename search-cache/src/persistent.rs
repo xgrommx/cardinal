@@ -24,7 +24,7 @@ pub struct PersistentStorage {
     /// Root index of the slab
     pub slab_root: SlabIndex,
     pub slab: ThinSlab<SlabNode>,
-    pub name_index: BTreeMap<String, Vec<SlabIndex>>,
+    pub name_index: BTreeMap<Box<str>, Vec<SlabIndex>>,
 }
 
 pub fn read_cache_from_file(path: &Path) -> Result<PersistentStorage> {

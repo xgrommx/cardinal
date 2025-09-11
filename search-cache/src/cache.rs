@@ -1,5 +1,7 @@
 use crate::{
-    persistent::{read_cache_from_file, write_cache_to_file, PersistentStorage}, type_and_size::StateTypeSize, OptionSlabIndex, SlabIndex, State, ThinSlab
+    OptionSlabIndex, SlabIndex, State, ThinSlab,
+    persistent::{PersistentStorage, read_cache_from_file, write_cache_to_file},
+    type_and_size::StateTypeSize,
 };
 use anyhow::{Context, Result, anyhow, bail};
 use cardinal_sdk::{EventFlag, FsEvent, ScanType, current_event_id};
@@ -8,7 +10,6 @@ use fswalk::{Node, NodeFileType, NodeMetadata, walk_it};
 use namepool::NamePool;
 use query_segmentation::{Segment, query_segmentation};
 use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
 use std::{
     collections::BTreeMap,
     ffi::{CString, OsStr},
@@ -17,14 +18,15 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
+use thin_vec::ThinVec;
 use tracing::{debug, info};
 use typed_num::Num;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SlabNode {
     parent: OptionSlabIndex,
-    children: SmallVec<SlabIndex, 2>,
-    name: String,
+    children: ThinVec<SlabIndex>,
+    name: Box<str>,
     metadata: SlabNodeMetadataCompact,
 }
 
@@ -39,10 +41,14 @@ impl SlabNode {
         }
     }
 
-    pub fn new(parent: Option<SlabIndex>, name: String, metadata: SlabNodeMetadataCompact) -> Self {
+    pub fn new(
+        parent: Option<SlabIndex>,
+        name: Box<str>,
+        metadata: SlabNodeMetadataCompact,
+    ) -> Self {
         Self {
             parent: OptionSlabIndex::from_option(parent),
-            children: SmallVec::new(),
+            children: ThinVec::new(),
             name,
             metadata,
         }
@@ -83,9 +89,9 @@ impl SlabNodeMetadataCompact {
         Self {
             state_type_and_size: StateTypeSize::unaccessible(),
             ctime: None,
-            mtime: None
+            mtime: None,
         }
-    } 
+    }
 
     pub fn some(
         NodeMetadata {
@@ -106,7 +112,7 @@ impl SlabNodeMetadataCompact {
         Self {
             state_type_and_size: StateTypeSize::none(),
             ctime: None,
-            mtime: None
+            mtime: None,
         }
     }
 
@@ -145,7 +151,7 @@ pub struct SearchCache {
     last_event_id: u64,
     slab_root: SlabIndex,
     slab: ThinSlab<SlabNode>,
-    name_index: BTreeMap<String, Vec<SlabIndex>>,
+    name_index: BTreeMap<Box<str>, Vec<SlabIndex>>,
     name_pool: NamePool,
 }
 
@@ -226,11 +232,11 @@ impl SearchCache {
 
             (slab_root, slab)
         }
-        fn name_index(slab: &ThinSlab<SlabNode>) -> BTreeMap<String, Vec<SlabIndex>> {
+        fn name_index(slab: &ThinSlab<SlabNode>) -> BTreeMap<Box<str>, Vec<SlabIndex>> {
             // TODO(ldm0): Memory optimization can be done by letting name index reference the name in the pool(gc need to be considered though)
             fn construct_name_index(
                 slab: &ThinSlab<SlabNode>,
-                name_index: &mut BTreeMap<String, Vec<SlabIndex>>,
+                name_index: &mut BTreeMap<Box<str>, Vec<SlabIndex>>,
             ) {
                 // The slab is newly constructed, thus though slab.iter() iterates all slots, it won't waste too much.
                 for (i, node) in slab.iter() {
@@ -268,7 +274,7 @@ impl SearchCache {
         last_event_id: u64,
         slab_root: SlabIndex,
         slab: ThinSlab<SlabNode>,
-        name_index: BTreeMap<String, Vec<SlabIndex>>,
+        name_index: BTreeMap<Box<str>, Vec<SlabIndex>>,
     ) -> Self {
         // name pool construction speed is fast enough that caching it doesn't worth it.
         let name_pool = name_pool(&name_index);
@@ -306,7 +312,7 @@ impl SearchCache {
                         if match segment {
                             Segment::Substr(substr) => self.slab[*child].name.contains(*substr),
                             Segment::Prefix(prefix) => self.slab[*child].name.starts_with(*prefix),
-                            Segment::Exact(exact) => self.slab[*child].name == *exact,
+                            Segment::Exact(exact) => &*self.slab[*child].name == *exact,
                             Segment::Suffix(suffix) => self.slab[*child].name.ends_with(*suffix),
                         } {
                             new_node_set.push(*child);
@@ -366,7 +372,7 @@ impl SearchCache {
         Some(
             self.path
                 .iter()
-                .chain(segments.iter().rev().map(OsStr::new))
+                .chain(segments.iter().rev().map(|x| OsStr::new(x.as_ref())))
                 .collect(),
         )
     }
@@ -388,14 +394,11 @@ impl SearchCache {
     /// Removes a node by path and its children recursively.
     fn remove_node_path(&mut self, path: &Path) -> Option<SlabIndex> {
         let mut current = self.slab_root;
-        for name in path
-            .components()
-            .map(|x| x.as_os_str().to_string_lossy().into_owned())
-        {
+        for name in path.components().map(|x| x.as_os_str()) {
             if let Some(&index) = self.slab[current]
                 .children
                 .iter()
-                .find(|&&x| self.slab[x].name == name)
+                .find(|&&x| &*self.slab[x].name == name)
             {
                 current = index;
             } else {
@@ -410,11 +413,9 @@ impl SearchCache {
     fn create_node_chain(&mut self, path: &Path) -> SlabIndex {
         let mut current = self.slab_root;
         let mut current_path = self.path.clone();
-        for name in path
-            .components()
-            .map(|x| x.as_os_str().to_string_lossy().into_owned())
-        {
-            current_path.push(name.clone());
+        for name in path.components().map(|x| x.as_os_str()) {
+            current_path.push(name);
+            let name = name.to_string_lossy().into_owned().into_boxed_str();
             current = if let Some(&index) = self.slab[current]
                 .children
                 .iter()
@@ -463,7 +464,7 @@ impl SearchCache {
         if let Some(&old_node) = self.slab[parent]
             .children
             .iter()
-            .find(|&&x| path.file_name() == Some(OsStr::new(&self.slab[x].name)))
+            .find(|&&x| path.file_name() == Some(OsStr::new(&*self.slab[x].name)))
         {
             self.remove_node(old_node);
         }
@@ -587,20 +588,24 @@ impl SearchCache {
             .into_iter()
             .map(|node_index| {
                 let path = self.node_path(node_index);
-                let metadata = self.slab.get_mut(node_index).map(|node| {
-                    match (node.metadata.state(), &path) {
-                        (State::None, Some(path)) if FETCH_META => {
-                            // try fetching metadata if it's not cached and cache them
-                            let metadata = match std::fs::symlink_metadata(path) {
-                                Ok(metadata) => SlabNodeMetadataCompact::some(metadata.into()),
-                                Err(_) => SlabNodeMetadataCompact::unaccessible(),
-                            };
-                            node.metadata = metadata;
-                            metadata
+                let metadata = self
+                    .slab
+                    .get_mut(node_index)
+                    .map(|node| {
+                        match (node.metadata.state(), &path) {
+                            (State::None, Some(path)) if FETCH_META => {
+                                // try fetching metadata if it's not cached and cache them
+                                let metadata = match std::fs::symlink_metadata(path) {
+                                    Ok(metadata) => SlabNodeMetadataCompact::some(metadata.into()),
+                                    Err(_) => SlabNodeMetadataCompact::unaccessible(),
+                                };
+                                node.metadata = metadata;
+                                metadata
+                            }
+                            _ => node.metadata,
                         }
-                        _ => node.metadata,
-                    }
-                }).unwrap_or_else(|| SlabNodeMetadataCompact::unaccessible());
+                    })
+                    .unwrap_or_else(|| SlabNodeMetadataCompact::unaccessible());
                 SearchResultNode {
                     path: path.unwrap_or_default(),
                     metadata,
@@ -707,7 +712,7 @@ fn construct_node_slab(
         Some(metadata) => SlabNodeMetadataCompact::some(metadata.into()),
         None => SlabNodeMetadataCompact::none(),
     };
-    let slab_node = SlabNode::new(parent, node.name.clone(), metadata);
+    let slab_node = SlabNode::new(parent, node.name.clone().into_boxed_str(), metadata);
     let index = slab.insert(slab_node);
     slab[index].children = node
         .children
@@ -732,7 +737,7 @@ impl SearchCache {
             // This function should only be called with Node fetched with metadata
             None => SlabNodeMetadataCompact::unaccessible(),
         };
-        let slab_node = SlabNode::new(parent, node.name.clone(), metadata);
+        let slab_node = SlabNode::new(parent, node.name.clone().into_boxed_str(), metadata);
         let index = self.push_node(slab_node);
         self.slab[index].children = node
             .children
@@ -743,7 +748,7 @@ impl SearchCache {
     }
 }
 
-fn name_pool(name_index: &BTreeMap<String, Vec<SlabIndex>>) -> NamePool {
+fn name_pool(name_index: &BTreeMap<Box<str>, Vec<SlabIndex>>) -> NamePool {
     let name_pool_time = Instant::now();
     let mut name_pool = NamePool::new();
     for name in name_index.keys() {
