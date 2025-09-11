@@ -51,6 +51,8 @@ impl SlabIndex {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
 pub struct ThinSlab<T>(slab::Slab<T>);
 
 impl<T> ThinSlab<T> {
@@ -72,10 +74,6 @@ impl<T> ThinSlab<T> {
 
     pub fn try_remove(&mut self, index: SlabIndex) -> Option<T> {
         self.0.try_remove(index.get())
-    }
-
-    pub fn into_inner(self) -> slab::Slab<T> {
-        self.0
     }
 
     pub fn len(&self) -> usize {
