@@ -68,11 +68,11 @@ impl<'a> SlabNodeMetadata<'a> {
     }
 
     pub fn ctime(&self) -> Option<NonZeroU32> {
-        self.0.ctime
+        NonZeroU32::new(self.0.ctime)
     }
 
     pub fn mtime(&self) -> Option<NonZeroU32> {
-        self.0.mtime
+        NonZeroU32::new(self.0.mtime)
     }
 }
 
@@ -80,16 +80,17 @@ impl<'a> SlabNodeMetadata<'a> {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct SlabNodeMetadataCompact {
     state_type_and_size: StateTypeSize,
-    ctime: Option<NonZeroU32>,
-    mtime: Option<NonZeroU32>,
+    // Actually a Option<NonZeroU32>, but using u32 here due to https://github.com/serde-rs/serde/issues/1834
+    ctime: u32,
+    mtime: u32,
 }
 
 impl SlabNodeMetadataCompact {
     pub fn unaccessible() -> Self {
         Self {
             state_type_and_size: StateTypeSize::unaccessible(),
-            ctime: None,
-            mtime: None,
+            ctime: 0,
+            mtime: 0,
         }
     }
 
@@ -103,16 +104,22 @@ impl SlabNodeMetadataCompact {
     ) -> Self {
         Self {
             state_type_and_size: StateTypeSize::some(r#type, size),
-            ctime: ctime.and_then(|x| NonZeroU32::try_from(x).ok()),
-            mtime: mtime.and_then(|x| NonZeroU32::try_from(x).ok()),
+            ctime: ctime
+                .and_then(|x| NonZeroU32::try_from(x).ok())
+                .map(|x| x.get())
+                .unwrap_or_default(),
+            mtime: mtime
+                .and_then(|x| NonZeroU32::try_from(x).ok())
+                .map(|x| x.get())
+                .unwrap_or_default(),
         }
     }
 
     pub fn none() -> Self {
         Self {
             state_type_and_size: StateTypeSize::none(),
-            ctime: None,
-            mtime: None,
+            ctime: 0,
+            mtime: 0,
         }
     }
 
