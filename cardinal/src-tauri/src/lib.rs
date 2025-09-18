@@ -186,7 +186,6 @@ pub fn run() -> Result<()> {
     // 运行Tauri应用
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_macos_permissions::init())
         .manage(SearchState {
             search_tx,
             result_rx,

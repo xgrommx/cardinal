@@ -34,7 +34,6 @@ search-cache.path = "../../search-cache"
 fswalk.path = "../../fswalk"
 fs-icon.path = "../../fs-icon"
 directories = "6.0.0"
-tauri-plugin-macos-permissions = "2.3.0"
 
 [features]
 default = []

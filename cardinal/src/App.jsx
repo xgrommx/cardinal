@@ -11,10 +11,6 @@ import { ROW_HEIGHT, OVERSCAN_ROW_COUNT } from './constants';
 import { VirtualList } from './components/VirtualList';
 import { StateDisplay } from './components/StateDisplay';
 import { usePreventRefresh } from './hooks/usePreventRefresh';
-import {
-  checkFullDiskAccessPermission,
-  requestFullDiskAccessPermission,
-} from "tauri-plugin-macos-permissions-api";
 
 function App() {
   usePreventRefresh();
@@ -24,20 +20,6 @@ function App() {
     menu, showContextMenu, showHeaderContextMenu, closeMenu, getMenuItems
   } = useContextMenu(autoFitColumns);
   const { onQueryChange, currentQuery, showLoadingUI, initialFetchCompleted, durationMs, resultCount, searchError } = useSearch(setResults);
-
-  useEffect(() => {
-    const checkPermissions = async () => {
-      const hasPermission = await checkFullDiskAccessPermission();
-      if (hasPermission === 'granted') {
-        console.log("Full disk access permission already granted.");
-      } else {
-        console.log("Full disk access permission not granted. Requesting...");
-        const result = await requestFullDiskAccessPermission();
-        console.log("Permission request result:", result);
-      }
-    };
-    checkPermissions();
-  }, []);
 
   const headerRef = useRef(null);
   const virtualListRef = useRef(null);
