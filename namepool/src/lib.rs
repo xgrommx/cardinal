@@ -18,6 +18,15 @@ pub struct NamePool {
     pool: Vec<u8>,
 }
 
+impl std::fmt::Debug for NamePool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NamePool")
+            .field("len", &self.pool.len())
+            .field("content", &String::from_utf8_lossy(&self.pool))
+            .finish()
+    }
+}
+
 impl NamePool {
     pub fn new() -> Self {
         Self { pool: vec![b'\0'] }
