@@ -56,8 +56,6 @@
 + 考虑类LSM/WAL设计?
 + icon 抓取之后异步 push，有些icon取得挺慢的
 + 重启+reopen window之后会很慢
-+ 一个全局 string池，生命周期类似于 allocator，
-    + 不适合用 allocator 形式，因为分配内存之后什么时候写入是不保证的
 
 ```bash
 npm run tauri dev -- --release --features dev

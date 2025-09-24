@@ -26,7 +26,6 @@ impl std::fmt::Debug for NamePool<CACHE_LINE_CAPACITY> {
     }
 }
 
-
 impl<const CAPACITY: usize> Default for NamePool<CAPACITY> {
     fn default() -> Self {
         Self::new()
