@@ -37,7 +37,7 @@ export const VirtualList = forwardRef(function VirtualList({
 	const rowCount = results?.length ?? 0;
 
 	// ----- data loader -----
-	const { ensureRangeLoaded } = useDataLoader(results, rowCount);
+	const { ensureRangeLoaded } = useDataLoader(results);
 
 	// 计算总虚拟高度和滚动范围
 	const totalHeight = rowCount * rowHeight;
@@ -64,9 +64,6 @@ export const VirtualList = forwardRef(function VirtualList({
 			return (prev.start !== nextRange.start || prev.end !== nextRange.end) ? nextRange : prev;
 		});
 	}, [maxScrollTop, computeRange, viewportHeight]);
-
-	// ----- data loading -----
-	// 使用独立的 data loader hook
 
 	// ----- event handlers -----
 	// 垂直滚动（阻止默认以获得一致行为）
