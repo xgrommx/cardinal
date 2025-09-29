@@ -43,23 +43,20 @@ export const VirtualList = forwardRef(function VirtualList({
 
 	// ----- callbacks: pure calculations first -----
 	// 计算可见范围
-	const computeRange = useCallback((currentScrollTop, vh) => {
-		if (!rowCount || !vh) return { start: 0, end: -1 };
-		const startIndex = Math.floor(currentScrollTop / rowHeight);
-		const endIndex = startIndex + Math.ceil(vh / rowHeight) - 1;
-		return {
-			start: Math.max(0, startIndex - overscan),
-			end: Math.min(rowCount - 1, endIndex + overscan)
-		};
-	}, [rowCount, rowHeight, overscan]);
+	let start = 0;
+	let end = -1;
+	if (rowCount > 0 && viewportHeight > 0) {
+		const startIndex = Math.floor(scrollTop / rowHeight);
+		const endIndex = startIndex + Math.ceil(viewportHeight / rowHeight) - 1;
+		start = Math.max(0, startIndex - overscan);
+		end = Math.min(rowCount - 1, endIndex + overscan);
+	}
 
-	// 更新滚动位置和范围
+	// 更新滚动位置
 	const updateScrollAndRange = useCallback((nextScrollTop) => {
 		const clamped = Math.max(0, Math.min(nextScrollTop, maxScrollTop));
 		setScrollTop(prev => (prev === clamped ? prev : clamped));
 	}, [maxScrollTop]);
-
-	const { start, end } = computeRange(scrollTop, viewportHeight);
 
 	// ----- event handlers -----
 	// 垂直滚动（阻止默认以获得一致行为）
