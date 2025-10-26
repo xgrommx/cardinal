@@ -34,7 +34,7 @@ pub fn icon_of_path(path: &str) -> Option<Vec<u8>> {
 pub fn icon_of_path_ns(path: &str) -> Option<Vec<u8>> {
     objc2::rc::autoreleasepool(|_| -> Option<Vec<u8>> {
         let path_ns = NSString::from_str(path);
-        let image = unsafe { NSWorkspace::sharedWorkspace().iconForFile(&path_ns) };
+        let image = NSWorkspace::sharedWorkspace().iconForFile(&path_ns);
 
         let png_data: Retained<NSData> = (|| -> Option<_> {
             unsafe {
@@ -66,7 +66,7 @@ pub fn icon_of_path_ns(path: &str) -> Option<Vec<u8>> {
                 }
             }
             // zoom in and you will see that the small icon in Finder is 32x32, here we keep it at 64x64 for better visibility
-            let (new_width, new_height) = unsafe {
+            let (new_width, new_height) = {
                 let width = 32.0;
                 let height = 32.0;
                 // keep aspect ratio
@@ -126,7 +126,7 @@ pub fn icon_of_path_ql(path: &str) -> Option<Vec<u8>> {
         let (width, height) =
             scale_with_aspect_ratio(width, height, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
         // use a slightly larger thumbnail size with 0.5 scale
-        let path_url = unsafe { NSURL::fileURLWithPath(&NSString::from_str(path)) };
+        let path_url = NSURL::fileURLWithPath(&NSString::from_str(path));
         let generator = unsafe { QLThumbnailGenerator::sharedGenerator() };
         {
             let (tx, rx) = bounded(1);
