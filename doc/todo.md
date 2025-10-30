@@ -9,6 +9,12 @@
   `search-cache/src/cache.rs` 目前在 `expand_file_nodes_inner` 中逐层拼接 `PathBuf`，搜索结果越多越耗时。为 `SlabNode` 缓存绝对路径或父链片段，并在 FSEvent 更新时增量维护，可显著降低分配与遍历成本。
 
 ## 中优先级
+- **保留前端搜索结果缓存**  
+  `cardinal/src/hooks/useDataLoader.js` 在每次新搜索时会清空缓存并重新请求前 30 行。若搜索结果未变（比如切换大小写选项但命中相同），可检测结果差异或在后端返回版本号，避免重复加载。
+- **去抖 icon viewport 更新**  
+  `cardinal/src/components/VirtualList.jsx` 的滚动会频繁 `update_icon_viewport`。为 `start/end` 建立快照，避免在范围未变时重复调用，并可以使用 `requestAnimationFrame` 合并高频触发。
+- **优化滚轮处理逻辑**  
+  `cardinal/src/components/VirtualList.jsx` 的 `handleWheel` 每次 render 都会新建 handler 且直接使用 `scrollTop`。改用函数式 `setScrollTop` 与 `deltaMode` 归一，可减少 GC 和滚动抖动。
 - **批量调度 icon 生成**  
   当前对每个视窗节点单独 `rayon::spawn`，Viewport 大时会产生大量任务，可换成 `icon_jobs.into_par_iter()` 或固定线程池批量处理，降低调度开销。
 - **NamePool 检索结构升级**  
