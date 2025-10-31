@@ -1,6 +1,31 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 
-const StatusBar = ({ scannedFiles, processedEvents, isReady, searchDurationMs, resultCount }) => {
+const TABS = [
+  { key: 'files', label: 'Files' },
+  { key: 'events', label: 'Events' },
+];
+
+const StatusBar = ({
+  scannedFiles,
+  processedEvents,
+  isReady,
+  searchDurationMs,
+  resultCount,
+  onTabChange,
+}) => {
+  const [activeTab, setActiveTab] = useState('files');
+
+  const handleSelect = useCallback(
+    (tabKey) => {
+      if (tabKey === activeTab) return;
+      setActiveTab(tabKey);
+      if (typeof onTabChange === 'function') {
+        onTabChange(tabKey);
+      }
+    },
+    [activeTab, onTabChange],
+  );
+
   const resultsText =
     typeof resultCount === 'number'
       ? `${resultCount.toLocaleString()} result${resultCount === 1 ? '' : 's'}`
@@ -17,13 +42,26 @@ const StatusBar = ({ scannedFiles, processedEvents, isReady, searchDurationMs, r
           </span>
           <span className="status-text">{isReady ? 'Ready' : 'Initializing'}</span>
         </div>
-        <div className="status-section">
-          <span className="status-label">Files:</span>
-          <span className="status-value">{scannedFiles.toLocaleString()}</span>
-        </div>
-        <div className="status-section">
-          <span className="status-label">Events:</span>
-          <span className="status-value">{processedEvents.toLocaleString()}</span>
+        <div className="status-tabs" role="tablist" aria-label="Search status view">
+          {TABS.map(({ key, label }) => {
+            const isActive = activeTab === key;
+            const value =
+              key === 'files' ? scannedFiles.toLocaleString() : processedEvents.toLocaleString();
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`status-tab ${isActive ? 'is-active' : ''}`}
+                data-tone={key}
+                onClick={() => handleSelect(key)}
+              >
+                <span className="status-tab__label">{label}</span>
+                <span className="status-tab__value">{value}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

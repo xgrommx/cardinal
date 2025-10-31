@@ -643,6 +643,130 @@ button:active {
   gap: 12px;
 }
 
+.status-left > .status-section:first-of-type {
+  padding-right: 12px;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.status-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 999px;
+  background: rgba(230, 232, 236, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.status-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(73, 80, 87, 0.75);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.status-tab:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  color: rgba(33, 37, 41, 0.92);
+}
+
+.status-tab:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.18);
+  outline-offset: 2px;
+  color: rgba(33, 37, 41, 0.96);
+}
+
+.status-tab.is-active {
+  background-color: rgba(255, 255, 255, 0.92);
+  color: rgba(33, 37, 41, 0.98);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.status-tab__label,
+.status-tab__value {
+  line-height: 1;
+}
+
+.status-tab__icon {
+  font-size: 13px;
+  line-height: 1;
+  filter: saturate(0.85);
+}
+
+.status-tab__value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+  line-height: 1;
+}
+
+.status-tab__label {
+  line-height: 1;
+}
+
+ .status-tab__label {
+  line-height: 1;
+}
+
+.status-tab[data-tone='files'] .status-tab__value {
+  color: #1c7c54;
+}
+
+.status-tab[data-tone='events'] .status-tab__value {
+  color: #c05621;
+}
+
+.status-tab.is-active[data-tone='files'] .status-tab__value {
+  color: #1c7c54;
+}
+
+.status-tab.is-active[data-tone='events'] .status-tab__value {
+  color: #c05621;
+}
+
+@media (prefers-color-scheme: dark) {
+  .status-left > .status-section:first-of-type {
+    border-right-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .status-tabs {
+    background: rgba(24, 29, 38, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .status-tab {
+    color: rgba(226, 232, 240, 0.72);
+  }
+
+  .status-tab:hover {
+    color: rgba(248, 250, 252, 0.95);
+    background-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .status-tab.is-active {
+    background-color: rgba(60, 70, 85, 0.55);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    color: rgba(248, 250, 252, 0.98);
+  }
+
+  .status-tab[data-tone='files'] .status-tab__value {
+    color: #68d391;
+  }
+
+  .status-tab[data-tone='events'] .status-tab__value {
+    color: #ff9770;
+  }
+}
+
 .status-right {
   margin-left: auto;
   display: flex;
