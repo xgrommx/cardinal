@@ -418,6 +418,11 @@ function App() {
       handleSearch({ query: '' });
       return;
     }
+
+    if (!(latestSearchRef.current || '').trim()) {
+      return;
+    }
+
     handleSearch();
   }, [caseSensitive, handleSearch, useRegex]);
 
