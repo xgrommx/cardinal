@@ -19,8 +19,10 @@ const COLUMNS = [
   { key: 'path', label: 'Path' },
 ];
 
-const BOTTOM_THRESHOLD = 50; // pixels from bottom to consider "at bottom"
+// Distance (px) from the bottom that still counts as "user is at the end"
+const BOTTOM_THRESHOLD = 50;
 
+// Normalize platform-specific paths and extract a display name + parent directory
 const splitPath = (path) => {
   if (!path) {
     return { name: '—', directory: '' };
@@ -38,7 +40,6 @@ const splitPath = (path) => {
   return { name, directory };
 };
 
-// EventRow component for rendering individual rows
 const EventRow = memo(function EventRow({
   item: event,
   rowIndex,
@@ -94,10 +95,10 @@ const FSEventsPanel = forwardRef(
   ) => {
     const headerRef = useRef(null);
     const listRef = useRef(null);
-    const isAtBottomRef = useRef(true); // Track if user is viewing bottom
+    const isAtBottomRef = useRef(true); // Track whether the viewport is watching the newest events
     const prevEventsLengthRef = useRef(events.length);
 
-    // Expose scrollToBottom method to parent
+    // Allow the parent (App) to imperatively jump to the latest event after tab switches
     useImperativeHandle(
       ref,
       () => ({
@@ -112,14 +113,13 @@ const FSEventsPanel = forwardRef(
       [events.length],
     );
 
-    // Handle scrolling - sync horizontal scroll to header and track bottom position
+    // Track viewport proximity to the bottom so streams only auto-scroll when the user expects it
     const handleScroll = useCallback(({ scrollLeft, scrollTop, scrollHeight, clientHeight }) => {
-      // Check if user is at or near the bottom
       const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
       isAtBottomRef.current = distanceFromBottom <= BOTTOM_THRESHOLD;
     }, []);
 
-    // Set up scroll listener on the actual Grid element for horizontal scroll sync
+    // Mirror the virtualized grid's horizontal scroll onto the sticky header element
     useEffect(() => {
       const list = listRef.current;
       if (!list || !list.Grid) return;
@@ -158,7 +158,7 @@ const FSEventsPanel = forwardRef(
       [events, onContextMenu, searchQuery, caseInsensitive],
     );
 
-    // Auto-scroll to bottom when new events arrive if user is at bottom
+    // Keep appending events visible when the user is already watching the feed tail
     useEffect(() => {
       const prevLength = prevEventsLengthRef.current;
       const currentLength = events.length;

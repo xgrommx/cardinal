@@ -1,0 +1,62 @@
+import { useCallback, useState } from 'react';
+import { CONTAINER_PADDING } from '../constants';
+
+const MIN_COLUMN_WIDTH = 80;
+const MAX_COLUMN_WIDTH = 800;
+
+const clampWidth = (value) => Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, value));
+
+export function useEventColumnWidths() {
+  // Compute initial column sizes using viewport width so the events table feels balanced
+  const calculateEventColWidths = useCallback(() => {
+    const totalWidth = window.innerWidth - CONTAINER_PADDING * 2;
+    return {
+      time: clampWidth(Math.floor(totalWidth * 0.2)),
+      name: clampWidth(Math.floor(totalWidth * 0.3)),
+      path: clampWidth(Math.floor(totalWidth * 0.5)),
+    };
+  }, []);
+
+  const [eventColWidths, setEventColWidths] = useState(calculateEventColWidths);
+
+  const onEventResizeStart = useCallback(
+    (e, key) => {
+      // Reuse the existing DOM drag pattern from the files table to keep UX consistent
+      e.preventDefault();
+      e.stopPropagation();
+
+      const startX = e.clientX;
+      const startWidth = eventColWidths[key];
+
+      const handleMouseMove = (moveEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const newWidth = clampWidth(startWidth + delta);
+        setEventColWidths((prev) => ({ ...prev, [key]: newWidth }));
+      };
+
+      const handleMouseUp = () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+    },
+    [eventColWidths],
+  );
+
+  const autoFitEventColumns = useCallback(() => {
+    // Snap columns back to their original ratios (invoked from context menu)
+    setEventColWidths(calculateEventColWidths());
+  }, [calculateEventColWidths]);
+
+  return {
+    eventColWidths,
+    onEventResizeStart,
+    autoFitEventColumns,
+  };
+}

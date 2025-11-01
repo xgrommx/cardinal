@@ -10,6 +10,7 @@ const State = ({ icon, title, message }) => (
   </div>
 );
 
+// Consistent empty/error/loading presentation inside the results pane
 export function StateDisplay({ state, message, query }) {
   if (state === 'loading') {
     return <State icon={<div className="spinner"></div>} title="Searching..." />;

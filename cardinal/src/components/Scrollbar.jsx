@@ -12,7 +12,7 @@ export const Scrollbar = ({
   const scrollThumbRef = useRef(null);
   const isDraggingRef = useRef(false);
 
-  // 更新滚动条位置和大小
+  // Keep the custom scrollbar thumb sized and positioned relative to the virtual height
   const updateScrollbar = useCallback(() => {
     const track = scrollTrackRef.current;
     const thumb = scrollThumbRef.current;
@@ -29,7 +29,7 @@ export const Scrollbar = ({
     thumb.style.transform = `translateY(${thumbTop}px)`;
   }, [totalHeight, viewportHeight, maxScrollTop, scrollTop]);
 
-  // 滚动条拖拽处理
+  // Allow dragging the thumb to control the virtual list scroll position
   const handleThumbMouseDown = useCallback(
     (e) => {
       e.preventDefault();
@@ -64,7 +64,7 @@ export const Scrollbar = ({
     [maxScrollTop, onScrollUpdate],
   );
 
-  // 滚动条轨道点击
+  // Jump to a new scroll offset when the user clicks the track directly
   const handleTrackClick = useCallback(
     (e) => {
       if (e.target === scrollThumbRef.current) return;
@@ -78,7 +78,7 @@ export const Scrollbar = ({
     [maxScrollTop, onScrollUpdate],
   );
 
-  // 当 props 变化时更新滚动条
+  // Recalculate whenever the virtualized geometry changes
   useEffect(() => {
     updateScrollbar();
   }, [updateScrollbar]);

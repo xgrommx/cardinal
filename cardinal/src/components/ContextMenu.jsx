@@ -5,6 +5,7 @@ export function ContextMenu({ x, y, items, onClose }) {
   const menuRef = useRef(null);
 
   useEffect(() => {
+    // Close the menu whenever the user clicks anywhere outside the menu surface
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         onClose();
@@ -16,6 +17,7 @@ export function ContextMenu({ x, y, items, onClose }) {
   }, [onClose]);
 
   const handleItemClick = (action) => {
+    // Invoke the menu action first, then tear down the menu overlay
     action();
     onClose();
   };

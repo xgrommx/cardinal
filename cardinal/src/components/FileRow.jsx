@@ -26,6 +26,7 @@ export const FileRow = memo(function FileRow({
     return null;
   }
 
+  // Accept both plain string paths and rich result objects produced by the search backend
   const path = typeof item === 'string' ? item : item?.path;
   let filename = '',
     directoryPath = '';
@@ -33,6 +34,7 @@ export const FileRow = memo(function FileRow({
     if (path === '/') {
       directoryPath = '/';
     } else {
+      // Split on either slash to support Windows and POSIX paths
       const parts = path.split(/[\\/]/);
       filename = parts.pop() || '';
       directoryPath = parts.join('/');
@@ -75,7 +77,7 @@ export const FileRow = memo(function FileRow({
           caseInsensitive={caseInsensitive}
         />
       </div>
-      {/* Path 列显示目录路径（不包含文件名） */}
+      {/* Directory column renders the parent path (the filename column already shows the leaf) */}
       <span className="path-text" title={directoryPath}>
         {directoryPath}
       </span>

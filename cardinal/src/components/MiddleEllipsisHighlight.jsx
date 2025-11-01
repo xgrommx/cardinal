@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 
-const CHAR_WIDTH = 8; // approximate character width in pixels
+const CHAR_WIDTH = 8; // approximate monospace character width in pixels – used for quick truncation math
 
 export function splitTextWithHighlight(text, searchTerm, options = {}) {
   const { caseInsensitive = false } = options;
@@ -41,10 +41,10 @@ function applyMiddleEllipsis(parts, maxChars) {
     return parts;
   }
 
-  const leftChars = Math.floor((maxChars - 1) / 2); // -1 for ellipsis
+  const leftChars = Math.floor((maxChars - 1) / 2); // reserve one slot for the ellipsis glyph
   const rightChars = maxChars - leftChars - 1;
 
-  // 收集左侧部分
+  // Populate the leading slice (stop once we run out of space)
   const leftParts = [];
   let leftCount = 0;
   for (const part of parts) {
@@ -63,7 +63,7 @@ function applyMiddleEllipsis(parts, maxChars) {
     }
   }
 
-  // 收集右侧部分
+  // Populate the trailing slice (build from the end backwards)
   const rightParts = [];
   let rightCount = 0;
   for (let i = parts.length - 1; i >= 0; i--) {
@@ -90,12 +90,12 @@ export function MiddleEllipsisHighlight({ text, className, highlightTerm, caseIn
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
-  // 计算高亮部分（只在 text 或 searchQuery 变化时重新计算）
+  // Break the string into highlight + non-highlight chunks only when inputs change
   const highlightedParts = useMemo(() => {
     return text ? splitTextWithHighlight(text, highlightTerm, { caseInsensitive }) : [];
   }, [text, highlightTerm, caseInsensitive]);
 
-  // 计算显示部分（只在 highlightedParts 或 containerWidth 变化时重新计算）
+  // Replace the middle of the string with an ellipsis so we preserve both ends
   const displayParts = useMemo(() => {
     if (!containerWidth || !highlightedParts.length) return highlightedParts;
 
@@ -103,7 +103,7 @@ export function MiddleEllipsisHighlight({ text, className, highlightTerm, caseIn
     return applyMiddleEllipsis(highlightedParts, maxChars);
   }, [highlightedParts, containerWidth]);
 
-  // 优化的 resize 处理
+  // Prefer a ResizeObserver so truncation reacts quickly to layout shifts
   const updateWidth = useCallback(() => {
     const el = containerRef.current;
     if (el) {

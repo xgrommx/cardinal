@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useReducer, useState, useMemo } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import './App.css';
 import { ContextMenu } from './components/ContextMenu';
 import { ColumnHeader } from './components/ColumnHeader';
@@ -6,81 +6,26 @@ import { FileRow } from './components/FileRow';
 import StatusBar from './components/StatusBar';
 import { useColumnResize } from './hooks/useColumnResize';
 import { useContextMenu } from './hooks/useContextMenu';
-import { ROW_HEIGHT, OVERSCAN_ROW_COUNT, SEARCH_DEBOUNCE_MS, CONTAINER_PADDING } from './constants';
+import { useFileSearch } from './hooks/useFileSearch';
+import { useEventColumnWidths } from './hooks/useEventColumnWidths';
+import { useRecentFSEvents } from './hooks/useRecentFSEvents';
+import { ROW_HEIGHT, OVERSCAN_ROW_COUNT } from './constants';
 import { VirtualList } from './components/VirtualList';
 import { StateDisplay } from './components/StateDisplay';
 import FSEventsPanel from './components/FSEventsPanel';
-import { invoke } from '@tauri-apps/api/core';
 import { listen, once } from '@tauri-apps/api/event';
 
-const cancelTimer = (timerRef) => {
-  if (timerRef.current) {
-    clearTimeout(timerRef.current);
-    timerRef.current = null;
-  }
-};
-
-const initialState = {
-  results: [],
-  isInitialized: false,
-  scannedFiles: 0,
-  processedEvents: 0,
-  currentQuery: '',
-  showLoadingUI: false,
-  initialFetchCompleted: false,
-  durationMs: null,
-  resultCount: 0,
-  searchError: null,
-};
-
-function reducer(state, action) {
-  switch (action.type) {
-    case 'STATUS_UPDATE':
-      return {
-        ...state,
-        scannedFiles: action.payload.scannedFiles,
-        processedEvents: action.payload.processedEvents,
-      };
-    case 'INIT_COMPLETED':
-      return { ...state, isInitialized: true };
-    case 'SEARCH_REQUEST':
-      return {
-        ...state,
-        searchError: null,
-        showLoadingUI: action.payload.immediate ? true : state.showLoadingUI,
-      };
-    case 'SEARCH_LOADING_DELAY':
-      return {
-        ...state,
-        showLoadingUI: true,
-      };
-    case 'SEARCH_SUCCESS':
-      return {
-        ...state,
-        results: action.payload.results,
-        currentQuery: action.payload.query,
-        showLoadingUI: false,
-        initialFetchCompleted: true,
-        durationMs: action.payload.duration,
-        resultCount: action.payload.count,
-        searchError: null,
-      };
-    case 'SEARCH_FAILURE':
-      return {
-        ...state,
-        showLoadingUI: false,
-        searchError: action.payload.error,
-        initialFetchCompleted: true,
-        durationMs: action.payload.duration,
-        resultCount: 0,
-      };
-    default:
-      return state;
-  }
-}
-
 function App() {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const {
+    state,
+    searchParams,
+    updateSearchParams,
+    queueSearch,
+    resetSearchQuery,
+    cancelPendingSearches,
+    handleStatusUpdate,
+    markInitialized,
+  } = useFileSearch();
   const {
     results,
     isInitialized,
@@ -94,12 +39,18 @@ function App() {
     searchError,
   } = state;
   const [activeTab, setActiveTab] = useState('files');
-  const [recentEvents, setRecentEvents] = useState([]);
-  const [eventFilterQuery, setEventFilterQuery] = useState('');
   const eventsPanelRef = useRef(null);
+  const headerRef = useRef(null);
+  const virtualListRef = useRef(null);
+  const isMountedRef = useRef(false);
   const { colWidths, onResizeStart, autoFitColumns } = useColumnResize();
+  const { useRegex, caseSensitive } = searchParams;
+  const { eventColWidths, onEventResizeStart, autoFitEventColumns } = useEventColumnWidths();
+  const { filteredEvents, eventFilterQuery, setEventFilterQuery } = useRecentFSEvents({
+    caseSensitive,
+    useRegex,
+  });
 
-  // Files context menu
   const {
     menu: filesMenu,
     showContextMenu: showFilesContextMenu,
@@ -108,53 +59,6 @@ function App() {
     getMenuItems: getFilesMenuItems,
   } = useContextMenu(autoFitColumns);
 
-  // Calculate event column widths based on ratios
-  const calculateEventColWidths = useCallback(() => {
-    const totalWidth = window.innerWidth - CONTAINER_PADDING * 2;
-    return {
-      time: Math.floor(totalWidth * 0.2),
-      name: Math.floor(totalWidth * 0.3),
-      path: Math.floor(totalWidth * 0.5),
-    };
-  }, []);
-
-  // Event columns resize state
-  const [eventColWidths, setEventColWidths] = useState(calculateEventColWidths);
-
-  const onEventResizeStart = useCallback(
-    (e, key) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const startX = e.clientX;
-      const startWidth = eventColWidths[key];
-
-      const handleMouseMove = (moveEvent) => {
-        const delta = moveEvent.clientX - startX;
-        const newWidth = Math.max(80, Math.min(800, startWidth + delta));
-        setEventColWidths((prev) => ({ ...prev, [key]: newWidth }));
-      };
-
-      const handleMouseUp = () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-      };
-
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'col-resize';
-    },
-    [eventColWidths],
-  );
-
-  const autoFitEventColumns = useCallback(() => {
-    setEventColWidths(calculateEventColWidths());
-  }, [calculateEventColWidths]);
-
-  // Events context menu
   const {
     menu: eventsMenu,
     showContextMenu: showEventsContextMenu,
@@ -163,28 +67,12 @@ function App() {
     getMenuItems: getEventsMenuItems,
   } = useContextMenu(autoFitEventColumns);
 
-  // Unified menu interface based on active tab
   const menu = activeTab === 'events' ? eventsMenu : filesMenu;
   const showContextMenu = activeTab === 'events' ? showEventsContextMenu : showFilesContextMenu;
   const showHeaderContextMenu =
     activeTab === 'events' ? showEventsHeaderContextMenu : showFilesHeaderContextMenu;
   const closeMenu = activeTab === 'events' ? closeEventsMenu : closeFilesMenu;
   const getMenuItems = activeTab === 'events' ? getEventsMenuItems : getFilesMenuItems;
-
-  const headerRef = useRef(null);
-  const virtualListRef = useRef(null);
-  const isMountedRef = useRef(false);
-  const debounceTimerRef = useRef(null);
-  const loadingDelayTimerRef = useRef(null);
-  const hasInitialSearchRunRef = useRef(false);
-  const latestSearchRef = useRef({ query: '', useRegex: false, caseSensitive: false });
-  const searchVersionRef = useRef(0);
-  const [searchParams, updateSearchParams] = useReducer((prev, patch) => {
-    const next = { ...prev, ...patch };
-    latestSearchRef.current = next;
-    return next;
-  }, latestSearchRef.current);
-  const { useRegex, caseSensitive } = searchParams;
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -195,18 +83,12 @@ function App() {
       unlistenStatus = await listen('status_bar_update', (event) => {
         if (!isMountedRef.current) return;
         const { scanned_files, processed_events } = event.payload;
-        dispatch({
-          type: 'STATUS_UPDATE',
-          payload: {
-            scannedFiles: scanned_files,
-            processedEvents: processed_events,
-          },
-        });
+        handleStatusUpdate(scanned_files, processed_events);
       });
 
       unlistenInit = await once('init_completed', () => {
         if (!isMountedRef.current) return;
-        dispatch({ type: 'INIT_COMPLETED' });
+        markInitialized();
       });
     };
 
@@ -221,189 +103,19 @@ function App() {
         unlistenInit();
       }
     };
-  }, []);
-
-  // Listen for new file system events and maintain them in JS
-  useEffect(() => {
-    let unlistenEvents;
-    const MAX_EVENTS = 10000;
-
-    const setupEventsListener = async () => {
-      try {
-        const normalizeEvent = (rawEvent) => {
-          if (!rawEvent || typeof rawEvent !== 'object') {
-            return rawEvent;
-          }
-
-          if (typeof rawEvent.eventId === 'number') {
-            return rawEvent;
-          }
-
-          const eventId =
-            typeof rawEvent.event_id === 'number'
-              ? rawEvent.event_id
-              : typeof rawEvent.eventID === 'number'
-                ? rawEvent.eventID
-                : undefined;
-
-          return eventId === undefined ? rawEvent : { ...rawEvent, eventId };
-        };
-
-        unlistenEvents = await listen('fs_events_batch', (event) => {
-          if (!isMountedRef.current) return;
-          const newEvents = Array.isArray(event?.payload) ? event.payload : [];
-          if (newEvents.length === 0) return;
-
-          setRecentEvents((prev) => {
-            const normalizedIncoming = newEvents.map(normalizeEvent);
-            let updated = [...prev, ...normalizedIncoming];
-            if (updated.length > MAX_EVENTS) {
-              updated = updated.slice(updated.length - MAX_EVENTS);
-            }
-            return updated;
-          });
-        });
-      } catch (error) {
-        console.error('Failed to listen for file events', error);
-      }
-    };
-
-    setupEventsListener();
-
-    return () => {
-      if (typeof unlistenEvents === 'function') {
-        unlistenEvents();
-      }
-    };
-  }, []);
-
-  // Filter events based on eventFilterQuery
-  const filteredEvents = useMemo(() => {
-    if (!eventFilterQuery.trim()) {
-      return recentEvents;
-    }
-
-    const query = eventFilterQuery;
-
-    // Use regex if enabled
-    if (useRegex) {
-      try {
-        const flags = caseSensitive ? '' : 'i';
-        const regex = new RegExp(query, flags);
-        return recentEvents.filter((event) => {
-          const path = event.path || '';
-          const name = path.split('/').pop() || '';
-          return regex.test(path) || regex.test(name);
-        });
-      } catch (error) {
-        // Invalid regex, return all events
-        return recentEvents;
-      }
-    }
-
-    // Simple string matching
-    const searchQuery = caseSensitive ? query : query.toLowerCase();
-    return recentEvents.filter((event) => {
-      const path = event.path || '';
-      const name = path.split('/').pop() || '';
-      const testPath = caseSensitive ? path : path.toLowerCase();
-      const testName = caseSensitive ? name : name.toLowerCase();
-      return testPath.includes(searchQuery) || testName.includes(searchQuery);
-    });
-  }, [recentEvents, eventFilterQuery, caseSensitive, useRegex]);
-
-  const handleSearch = useCallback(
-    async (overrides = {}) => {
-      const nextSearch = { ...latestSearchRef.current, ...overrides };
-      latestSearchRef.current = nextSearch;
-      const requestVersion = searchVersionRef.current + 1;
-      searchVersionRef.current = requestVersion;
-
-      const { query, useRegex: nextUseRegex, caseSensitive: nextCaseSensitive } = nextSearch;
-      const startTs = performance.now();
-      const isInitial = !hasInitialSearchRunRef.current;
-      const trimmedQuery = query.trim();
-
-      dispatch({ type: 'SEARCH_REQUEST', payload: { immediate: isInitial } });
-
-      if (!isInitial) {
-        cancelTimer(loadingDelayTimerRef);
-        loadingDelayTimerRef.current = setTimeout(() => {
-          dispatch({ type: 'SEARCH_LOADING_DELAY' });
-          loadingDelayTimerRef.current = null;
-        }, 150);
-      }
-
-      try {
-        const searchResults = await invoke('search', {
-          query,
-          options: {
-            useRegex: nextUseRegex,
-            caseInsensitive: !nextCaseSensitive,
-          },
-        });
-
-        if (searchVersionRef.current !== requestVersion) {
-          return;
-        }
-
-        cancelTimer(loadingDelayTimerRef);
-
-        const endTs = performance.now();
-        const duration = endTs - startTs;
-
-        dispatch({
-          type: 'SEARCH_SUCCESS',
-          payload: {
-            results: searchResults,
-            query: trimmedQuery,
-            duration,
-            count: Array.isArray(searchResults) ? searchResults.length : 0,
-          },
-        });
-      } catch (error) {
-        console.error('Search failed:', error);
-
-        if (searchVersionRef.current !== requestVersion) {
-          return;
-        }
-
-        cancelTimer(loadingDelayTimerRef);
-
-        const endTs = performance.now();
-        const duration = endTs - startTs;
-
-        dispatch({
-          type: 'SEARCH_FAILURE',
-          payload: {
-            error: error || 'An unknown error occurred.',
-            duration,
-          },
-        });
-      } finally {
-        hasInitialSearchRunRef.current = true;
-      }
-    },
-    [dispatch],
-  );
+  }, [handleStatusUpdate, markInitialized]);
 
   const onQueryChange = useCallback(
     (e) => {
       const inputValue = e.target.value;
 
       if (activeTab === 'events') {
-        // For events tab, just update the filter query (no debounce, instant filter)
         setEventFilterQuery(inputValue);
       } else {
-        // For files tab, perform the search with debounce
-        updateSearchParams({ query: inputValue });
-        cancelTimer(debounceTimerRef);
-        debounceTimerRef.current = setTimeout(() => {
-          handleSearch({ query: inputValue });
-        }, SEARCH_DEBOUNCE_MS);
+        queueSearch(inputValue);
       }
     },
-    [activeTab, handleSearch, updateSearchParams],
+    [activeTab, queueSearch, setEventFilterQuery],
   );
 
   const onToggleRegex = useCallback(
@@ -422,29 +134,8 @@ function App() {
     [updateSearchParams],
   );
 
-  useEffect(
-    () => () => {
-      cancelTimer(debounceTimerRef);
-      cancelTimer(loadingDelayTimerRef);
-    },
-    [],
-  );
-
   useEffect(() => {
-    if (!hasInitialSearchRunRef.current) {
-      handleSearch({ query: '' });
-      return;
-    }
-
-    if (!(latestSearchRef.current.query || '').trim()) {
-      return;
-    }
-
-    handleSearch();
-  }, [caseSensitive, handleSearch, useRegex]);
-
-  // scroll position reset & initial data preload on `results` change
-  useEffect(() => {
+    // Reset vertical scroll and prefetch initial rows to keep first render responsive
     const list = virtualListRef.current;
     if (!list) return;
 
@@ -458,19 +149,20 @@ function App() {
     list.ensureRangeLoaded(0, preloadCount - 1);
   }, [results]);
 
-  // 滚动同步处理 - 单向同步版本（Grid -> Header）
   const handleHorizontalSync = useCallback((scrollLeft) => {
-    if (headerRef.current) headerRef.current.scrollLeft = scrollLeft;
+    // VirtualList drives the scroll position; mirror it onto the sticky header for alignment
+    if (headerRef.current) {
+      headerRef.current.scrollLeft = scrollLeft;
+    }
   }, []);
 
-  // 单元格渲染 - 使用 useCallback 避免 VirtualList 不必要的重渲染
   const renderRow = useCallback(
     (rowIndex, item, rowStyle) => (
       <FileRow
         key={rowIndex}
         item={item}
         rowIndex={rowIndex}
-        style={{ ...rowStyle, width: 'var(--columns-total)' }}
+        style={{ ...rowStyle, width: 'var(--columns-total)' }} // Enforce column width CSS vars for virtualization rows
         onContextMenu={showContextMenu}
         searchQuery={currentQuery}
         caseInsensitive={!caseSensitive}
@@ -480,6 +172,7 @@ function App() {
   );
 
   const getDisplayState = () => {
+    // Derive the UI state from search lifecycle, preserving existing semantics
     if (!initialFetchCompleted) return 'loading';
     if (showLoadingUI) return 'loading';
     if (searchError) return 'error';
@@ -489,37 +182,30 @@ function App() {
 
   const displayState = getDisplayState();
 
-  // Scroll to bottom when switching to events tab
   useEffect(() => {
     if (activeTab === 'events') {
-      // Queue the scroll after the current render cycle completes
-      // This ensures AutoSizer has measured the List component
+      // Defer to next microtask so AutoSizer/Virtualized list have measured before scrolling
       queueMicrotask(() => {
         eventsPanelRef.current?.scrollToBottom?.();
       });
     }
   }, [activeTab]);
 
-  // Handle tab change: clear search input when switching tabs
   const handleTabChange = useCallback(
     (newTab) => {
       setActiveTab(newTab);
       if (newTab === 'events') {
+        // Switch to events: always show newest items and clear transient filters
         setEventFilterQuery('');
       } else {
-        // Clear the search input for files tab
-        const searchInput = document.getElementById('search-input');
-        if (searchInput) {
-          searchInput.value = '';
-        }
-        updateSearchParams({ query: '' });
-        cancelTimer(debounceTimerRef);
+        // Switch to files: sync with reducer-managed search state and cancel pending timers
+        resetSearchQuery();
+        cancelPendingSearches();
       }
     },
-    [updateSearchParams],
+    [cancelPendingSearches, resetSearchQuery, setEventFilterQuery],
   );
 
-  // Get the current search input value based on active tab
   const searchInputValue = activeTab === 'events' ? eventFilterQuery : searchParams.query;
 
   return (
@@ -579,7 +265,9 @@ function App() {
           ['--w-event-name']: `${eventColWidths.name}px`,
           ['--w-event-path']: `${eventColWidths.path}px`,
           ['--w-event-time']: `${eventColWidths.time}px`,
-          ['--columns-events-total']: `${eventColWidths.name + eventColWidths.path + eventColWidths.time}px`,
+          ['--columns-events-total']: `${
+            eventColWidths.name + eventColWidths.path + eventColWidths.time
+          }px`,
         }}
       >
         {activeTab === 'events' ? (

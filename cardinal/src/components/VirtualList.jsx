@@ -13,9 +13,7 @@ import { invoke } from '@tauri-apps/api/core';
 import Scrollbar from './Scrollbar';
 import { useDataLoader } from '../hooks/useDataLoader';
 
-/**
- * 虚拟滚动列表组件（含行数据按需加载缓存）
- */
+// Virtualized list with lazy row hydration and synchronized column scrolling
 export const VirtualList = forwardRef(function VirtualList(
   { results = null, rowHeight = 24, overscan = 5, renderRow, onScrollSync, className = '' },
   ref,
@@ -29,18 +27,18 @@ export const VirtualList = forwardRef(function VirtualList(
   const [viewportHeight, setViewportHeight] = useState(0);
 
   // ----- derived -----
-  // 行数直接来自 results（不再支持显式 rowCount）
+  // Row count is inferred from the results array; explicit rowCount is no longer supported
   const rowCount = results?.length ?? 0;
 
   // ----- data loader -----
   const { cache, ensureRangeLoaded } = useDataLoader(results);
 
-  // 计算总虚拟高度和滚动范围
+  // Virtualized height powers the scrollbar math
   const totalHeight = rowCount * rowHeight;
   const maxScrollTop = Math.max(0, totalHeight - viewportHeight);
 
   // ----- callbacks: pure calculations first -----
-  // 计算可见范围
+  // Compute visible window (with overscan) based on the current scroll offset
   const start =
     rowCount && viewportHeight ? Math.max(0, Math.floor(scrollTop / rowHeight) - overscan) : 0;
   const end =
@@ -48,7 +46,7 @@ export const VirtualList = forwardRef(function VirtualList(
       ? Math.min(rowCount - 1, Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan - 1)
       : -1;
 
-  // 更新滚动位置
+  // Clamp scroll updates so callers cannot push the viewport outside legal bounds
   const updateScrollAndRange = useCallback(
     (updater) => {
       setScrollTop((prev) => {
@@ -61,7 +59,7 @@ export const VirtualList = forwardRef(function VirtualList(
   );
 
   // ----- event handlers -----
-  // 垂直滚动（阻止默认以获得一致行为）
+  // Normalise wheel deltas (line/page vs pixel) for consistent vertical scrolling
   const handleWheel = useCallback(
     (e) => {
       e.preventDefault();
@@ -78,7 +76,7 @@ export const VirtualList = forwardRef(function VirtualList(
     [rowHeight, viewportHeight, updateScrollAndRange],
   );
 
-  // 水平滚动同步
+  // Propagate horizontal scroll offset to the parent (keeps column headers aligned)
   const handleHorizontalScroll = useCallback(
     (e) => {
       if (onScrollSync) onScrollSync(e.target.scrollLeft);
@@ -90,15 +88,14 @@ export const VirtualList = forwardRef(function VirtualList(
   const updateIconViewport = useCallback((viewport) => {
     const requestId = iconRequestIdRef.current + 1;
     iconRequestIdRef.current = requestId;
-    // console.log('Updating icon viewport', requestId, viewport );
+    // Notify the backend which rows are visible so icon thumbnails can stream lazily
     invoke('update_icon_viewport', { id: requestId, viewport }).catch((error) => {
       console.error('Failed to update icon viewport', error);
     });
   }, []);
 
-  // 可见窗口变化时自动加载
+  // Ensure the data cache stays warm for the active window
   useEffect(() => {
-    // auto load
     if (end >= start) ensureRangeLoaded(start, end);
   }, [start, end, ensureRangeLoaded]);
 
@@ -127,9 +124,8 @@ export const VirtualList = forwardRef(function VirtualList(
     [updateIconViewport],
   );
 
-  // 监听容器尺寸变化
+  // Track container height changes so virtualization recalculates the viewport
   useLayoutEffect(() => {
-    // observe container height
     const container = containerRef.current;
     if (!container) return;
     const updateViewport = () => setViewportHeight(container.clientHeight);
@@ -139,7 +135,7 @@ export const VirtualList = forwardRef(function VirtualList(
     return () => resizeObserver.disconnect();
   }, []);
 
-  // 当滚动范围变化时校正位置
+  // Re-clamp scrollTop whenever total height shrinks (e.g. due to a narrower result set)
   useEffect(() => {
     setScrollTop((prev) => {
       const clamped = Math.max(0, Math.min(prev, maxScrollTop));
@@ -148,7 +144,7 @@ export const VirtualList = forwardRef(function VirtualList(
   }, [maxScrollTop]);
 
   // ----- imperative API -----
-  // 暴露的API
+  // Imperative handle used by App.jsx to drive preloading and programmatic scroll
   useImperativeHandle(
     ref,
     () => ({
@@ -159,7 +155,7 @@ export const VirtualList = forwardRef(function VirtualList(
   );
 
   // ----- rendered items memo -----
-  // 渲染的项目 - 使用 useMemo 避免每次都创建新数组
+  // Memoize rendered rows so virtualization only re-renders what it must
   const renderedItems = useMemo(() => {
     if (end < start) return null;
 

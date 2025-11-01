@@ -20,6 +20,7 @@ const StatusBar = ({
   const [sliderStyle, setSliderStyle] = useState({});
 
   useLayoutEffect(() => {
+    // Keep the active-tab underline aligned even when labels resize or counters update
     const updateSliderPosition = () => {
       const activeTabRef = activeTab === 'files' ? filesTabRef : eventsTabRef;
       if (activeTabRef.current && tabsRef.current) {
@@ -34,7 +35,7 @@ const StatusBar = ({
     };
 
     updateSliderPosition();
-    // Update on window resize
+    // Re-align the slider when the viewport changes width
     window.addEventListener('resize', updateSliderPosition);
     return () => window.removeEventListener('resize', updateSliderPosition);
   }, [activeTab, scannedFiles, processedEvents]);

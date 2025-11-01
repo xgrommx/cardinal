@@ -15,7 +15,10 @@ export const ColumnHeader = forwardRef(({ onResizeStart, onContextMenu }, ref) =
       {columns.map(({ key, label, className }) => (
         <span key={key} className={`${className} header header-cell`}>
           {label}
-          <span className="col-resizer" onMouseDown={onResizeStart(key)} />
+          <span
+            className="col-resizer"
+            onMouseDown={onResizeStart(key)} // consume column-specific resize closures from the parent hook
+          />
         </span>
       ))}
       {/* Spacer for scrollbar width alignment */}
