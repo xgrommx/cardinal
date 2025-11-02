@@ -3,30 +3,30 @@ use bitflags::bitflags;
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct EventFlag: u32 {
-        const None = fsevent_sys::kFSEventStreamEventFlagNone;
-        const MustScanSubDirs = fsevent_sys::kFSEventStreamEventFlagMustScanSubDirs;
-        const UserDropped = fsevent_sys::kFSEventStreamEventFlagUserDropped;
-        const KernelDropped = fsevent_sys::kFSEventStreamEventFlagKernelDropped;
-        const EventIdsWrapped = fsevent_sys::kFSEventStreamEventFlagEventIdsWrapped;
-        const HistoryDone = fsevent_sys::kFSEventStreamEventFlagHistoryDone;
-        const RootChanged = fsevent_sys::kFSEventStreamEventFlagRootChanged;
-        const Mount = fsevent_sys::kFSEventStreamEventFlagMount;
-        const Unmount = fsevent_sys::kFSEventStreamEventFlagUnmount;
-        const ItemCreated = fsevent_sys::kFSEventStreamEventFlagItemCreated;
-        const ItemRemoved = fsevent_sys::kFSEventStreamEventFlagItemRemoved;
-        const ItemInodeMetaMod = fsevent_sys::kFSEventStreamEventFlagItemInodeMetaMod;
-        const ItemRenamed = fsevent_sys::kFSEventStreamEventFlagItemRenamed;
-        const ItemModified = fsevent_sys::kFSEventStreamEventFlagItemModified;
-        const ItemFinderInfoMod = fsevent_sys::kFSEventStreamEventFlagItemFinderInfoMod;
-        const ItemChangeOwner = fsevent_sys::kFSEventStreamEventFlagItemChangeOwner;
-        const ItemXattrMod = fsevent_sys::kFSEventStreamEventFlagItemXattrMod;
-        const ItemIsFile = fsevent_sys::kFSEventStreamEventFlagItemIsFile;
-        const ItemIsDir = fsevent_sys::kFSEventStreamEventFlagItemIsDir;
-        const ItemIsSymlink = fsevent_sys::kFSEventStreamEventFlagItemIsSymlink;
-        const OwnEvent = fsevent_sys::kFSEventStreamEventFlagOwnEvent;
-        const IsHardlink = fsevent_sys::kFSEventStreamEventFlagItemIsHardlink;
-        const IsLastHardlink = fsevent_sys::kFSEventStreamEventFlagItemIsLastHardlink;
-        const Cloned = fsevent_sys::kFSEventStreamEventFlagItemCloned;
+        const None = objc2_core_services::kFSEventStreamEventFlagNone;
+        const MustScanSubDirs = objc2_core_services::kFSEventStreamEventFlagMustScanSubDirs;
+        const UserDropped = objc2_core_services::kFSEventStreamEventFlagUserDropped;
+        const KernelDropped = objc2_core_services::kFSEventStreamEventFlagKernelDropped;
+        const EventIdsWrapped = objc2_core_services::kFSEventStreamEventFlagEventIdsWrapped;
+        const HistoryDone = objc2_core_services::kFSEventStreamEventFlagHistoryDone;
+        const RootChanged = objc2_core_services::kFSEventStreamEventFlagRootChanged;
+        const Mount = objc2_core_services::kFSEventStreamEventFlagMount;
+        const Unmount = objc2_core_services::kFSEventStreamEventFlagUnmount;
+        const ItemCreated = objc2_core_services::kFSEventStreamEventFlagItemCreated;
+        const ItemRemoved = objc2_core_services::kFSEventStreamEventFlagItemRemoved;
+        const ItemInodeMetaMod = objc2_core_services::kFSEventStreamEventFlagItemInodeMetaMod;
+        const ItemRenamed = objc2_core_services::kFSEventStreamEventFlagItemRenamed;
+        const ItemModified = objc2_core_services::kFSEventStreamEventFlagItemModified;
+        const ItemFinderInfoMod = objc2_core_services::kFSEventStreamEventFlagItemFinderInfoMod;
+        const ItemChangeOwner = objc2_core_services::kFSEventStreamEventFlagItemChangeOwner;
+        const ItemXattrMod = objc2_core_services::kFSEventStreamEventFlagItemXattrMod;
+        const ItemIsFile = objc2_core_services::kFSEventStreamEventFlagItemIsFile;
+        const ItemIsDir = objc2_core_services::kFSEventStreamEventFlagItemIsDir;
+        const ItemIsSymlink = objc2_core_services::kFSEventStreamEventFlagItemIsSymlink;
+        const OwnEvent = objc2_core_services::kFSEventStreamEventFlagOwnEvent;
+        const IsHardlink = objc2_core_services::kFSEventStreamEventFlagItemIsHardlink;
+        const IsLastHardlink = objc2_core_services::kFSEventStreamEventFlagItemIsLastHardlink;
+        const Cloned = objc2_core_services::kFSEventStreamEventFlagItemCloned;
     }
 }
 

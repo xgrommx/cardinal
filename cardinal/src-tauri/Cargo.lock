@@ -411,8 +411,9 @@ dependencies = [
  "core-foundation",
  "crossbeam-channel",
  "dispatch2",
- "fsevent-sys",
  "libc",
+ "objc2-core-foundation",
+ "objc2-core-services",
 ]
 
 [[package]]
@@ -1113,15 +1114,6 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-image-io",
  "objc2-quick-look-thumbnailing",
-]
-
-[[package]]
-name = "fsevent-sys"
-version = "5.1.0"
-source = "git+https://github.com/ldm0/fsevent-rust#c059488c3e11f59cb0b1c4c341d321c5a6e4ca8b"
-dependencies = [
- "core-foundation",
- "dispatch2",
 ]
 
 [[package]]
@@ -2440,6 +2432,17 @@ checksum = "e5d563b38d2b97209f8e861173de434bd0214cf020e3423a52624cd1d989f006"
 dependencies = [
  "objc2 0.6.3",
  "objc2-foundation 0.3.2",
+]
+
+[[package]]
+name = "objc2-core-services"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583300ad934cba24ff5292aee751ecc070f7ca6b39a574cc21b7b5e588e06a0b"
+dependencies = [
+ "dispatch2",
+ "libc",
+ "objc2-core-foundation",
 ]
 
 [[package]]

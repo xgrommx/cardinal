@@ -1,15 +1,20 @@
 use crate::FsEvent;
 use anyhow::{Result, bail};
-use core_foundation::{array::CFArray, base::TCFType, date::CFTimeInterval, string::CFString};
 use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
 use dispatch2::{DispatchQueue, DispatchQueueAttr, DispatchRetained};
-use fsevent_sys::{
-    FSEventStreamContext, FSEventStreamCreate, FSEventStreamEventFlags, FSEventStreamEventId,
-    FSEventStreamInvalidate, FSEventStreamRef, FSEventStreamRelease, FSEventStreamSetDispatchQueue,
-    FSEventStreamStart, FSEventStreamStop, kFSEventStreamCreateFlagFileEvents,
-    kFSEventStreamCreateFlagNoDefer, kFSEventStreamCreateFlagWatchRoot,
+use objc2_core_foundation::{CFArray, CFString, CFTimeInterval};
+use objc2_core_services::{
+    ConstFSEventStreamRef, FSEventStreamContext, FSEventStreamCreate, FSEventStreamEventFlags,
+    FSEventStreamEventId, FSEventStreamInvalidate, FSEventStreamRef, FSEventStreamRelease,
+    FSEventStreamSetDispatchQueue, FSEventStreamStart, FSEventStreamStop,
+    kFSEventStreamCreateFlagFileEvents, kFSEventStreamCreateFlagNoDefer,
+    kFSEventStreamCreateFlagWatchRoot,
 };
-use std::{ffi::c_void, ptr, slice};
+use std::{
+    ffi::c_void,
+    ptr::NonNull,
+    slice,
+};
 
 type EventsCallback = Box<dyn FnMut(Vec<FsEvent>) + Send>;
 
@@ -32,26 +37,23 @@ impl EventStream {
         latency: CFTimeInterval,
         callback: EventsCallback,
     ) -> Self {
-        extern "C" fn drop_callback(info: *mut c_void) {
+        unsafe extern "C-unwind" fn drop_callback(info: *const c_void) {
             let _cb: Box<EventsCallback> = unsafe { Box::from_raw(info as _) };
         }
 
-        extern "C" fn raw_callback(
-            _stream: FSEventStreamRef,  // ConstFSEventStreamRef streamRef
-            callback_info: *mut c_void, // void *clientCallBackInfo
-            num_events: usize,          // size_t numEvents
-            event_paths: *mut c_void,   // void *eventPaths
-            event_flags: *const FSEventStreamEventFlags, // const FSEventStreamEventFlags eventFlags[]
-            event_ids: *const FSEventStreamEventId,      // const FSEventStreamEventId eventIds[]
+        unsafe extern "C-unwind" fn raw_callback(
+            _stream: ConstFSEventStreamRef, // ConstFSEventStreamRef streamRef
+            callback_info: *mut c_void,     // void *clientCallBackInfo
+            num_events: usize,              // size_t numEvents
+            event_paths: NonNull<c_void>,   // void *eventPaths
+            event_flags: NonNull<FSEventStreamEventFlags>, // const FSEventStreamEventFlags eventFlags[]
+            event_ids: NonNull<FSEventStreamEventId>,      // const FSEventStreamEventId eventIds[]
         ) {
-            let event_paths =
-                unsafe { slice::from_raw_parts(event_paths as *const *const i8, num_events) };
-            let event_flags = unsafe {
-                slice::from_raw_parts(event_flags as *const FSEventStreamEventFlags, num_events)
+            let event_paths = unsafe {
+                slice::from_raw_parts(event_paths.as_ptr() as *const *const i8, num_events)
             };
-            let event_ids = unsafe {
-                slice::from_raw_parts(event_ids as *const FSEventStreamEventId, num_events)
-            };
+            let event_flags = unsafe { slice::from_raw_parts(event_flags.as_ptr(), num_events) };
+            let event_ids = unsafe { slice::from_raw_parts(event_ids.as_ptr(), num_events) };
             let events: Vec<_> = event_paths
                 .iter()
                 .zip(event_flags)
@@ -63,22 +65,22 @@ impl EventStream {
             callback(events);
         }
 
-        let paths: Vec<_> = paths.iter().map(|&x| CFString::new(x)).collect();
-        let paths = CFArray::from_CFTypes(&paths);
-        let context = FSEventStreamContext {
+        let paths: Vec<_> = paths.iter().map(|&x| CFString::from_str(x)).collect();
+        let paths = CFArray::from_retained_objects(&paths);
+        let mut context = FSEventStreamContext {
             version: 0,
             info: Box::leak(Box::new(callback)) as *mut _ as *mut _,
             retain: None,
             release: Some(drop_callback),
-            copy_description: None,
+            copyDescription: None,
         };
 
         let stream: FSEventStreamRef = unsafe {
             FSEventStreamCreate(
-                ptr::null_mut(),
-                raw_callback,
-                &context,
-                paths.as_concrete_TypeRef() as _,
+                None,
+                Some(raw_callback),
+                &mut context,
+                paths.as_opaque(),
                 since_event_id,
                 latency,
                 kFSEventStreamCreateFlagNoDefer
@@ -91,9 +93,9 @@ impl EventStream {
 
     pub fn spawn(self) -> Result<EventStreamWithQueue> {
         let queue = DispatchQueue::new("cardinal-sdk-queue", DispatchQueueAttr::SERIAL);
-        unsafe { FSEventStreamSetDispatchQueue(self.stream, &queue) };
+        unsafe { FSEventStreamSetDispatchQueue(self.stream, Some(&queue)) };
         let result = unsafe { FSEventStreamStart(self.stream) };
-        if result == 0 {
+        if !result {
             // TODO(ldm0): RAII
             unsafe { FSEventStreamStop(self.stream) };
             unsafe { FSEventStreamInvalidate(self.stream) };

@@ -8,8 +8,18 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.69"
 bitflags = "2.9.0"
-# fsevent-sys = "5.1.0"
-fsevent-sys.git = "https://github.com/ldm0/fsevent-rust"
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "CFString",
+    "CFRunLoop",
+    "CFArray",
+] }
+objc2-core-services = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "FSEvents",
+    "dispatch2",
+    "libc",
+] }
 chrono = "0.4.41"
 core-foundation = { version = "0.10.1", features = ["mac_os_10_8_features"] }
 dispatch2 = { version = "0.3.0", default-features = true, features = ["alloc"] }

@@ -400,17 +400,14 @@ impl SearchCache {
             return Some(current);
         }
         for segment in relative.components().map(|component| component.as_os_str()) {
-            let next = self.slab[current]
-                .children
-                .iter()
-                .find_map(|&child| {
-                    let name = self.slab[child].name_and_parent.as_str();
-                    if OsStr::new(name) == segment {
-                        Some(child)
-                    } else {
-                        None
-                    }
-                })?;
+            let next = self.slab[current].children.iter().find_map(|&child| {
+                let name = self.slab[child].name_and_parent.as_str();
+                if OsStr::new(name) == segment {
+                    Some(child)
+                } else {
+                    None
+                }
+            })?;
             current = next;
         }
         Some(current)

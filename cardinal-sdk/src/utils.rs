@@ -1,6 +1,6 @@
 use chrono::Utc;
-use fsevent_sys::{FSEventsGetCurrentEventId, FSEventsGetLastEventIdForDeviceBeforeTime};
 use libc::dev_t;
+use objc2_core_services::{FSEventsGetCurrentEventId, FSEventsGetLastEventIdForDeviceBeforeTime};
 use std::{cell::RefCell, collections::HashMap, ffi::CStr, mem::MaybeUninit};
 
 pub fn current_timestamp() -> i64 {
