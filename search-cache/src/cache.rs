@@ -605,7 +605,6 @@ impl SearchCache {
         self.expand_file_nodes_inner::<true>(nodes)
     }
 
-    // TODO(ldm0): use nodes as slice
     fn expand_file_nodes_inner<const FETCH_META: bool>(
         &mut self,
         nodes: &[SlabIndex],

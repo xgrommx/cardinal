@@ -26,7 +26,7 @@ pub struct PersistentStorage {
     pub slab_root: SlabIndex,
     pub slab: ThinSlab<SlabNode>,
     // TODO(ldm0): consider using a more compact structure to replace the hashset, mostly hashset only contains one element
-    // for each name, we can use a vec and dedup it when querying
+    // for each name, maybe we can use a vec and dedup it when querying
     pub name_index: BTreeMap<Box<str>, HashSet<SlabIndex>>,
 }
 
