@@ -471,6 +471,7 @@ pub fn run() -> Result<()> {
     }
     builder = builder
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_window_state::Builder::new().build());
     // Run the Tauri application.
     let app = builder
