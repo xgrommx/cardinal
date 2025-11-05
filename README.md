@@ -13,7 +13,7 @@
 
 ## Requirements
 
-- macOS 13+ (current integrations target macOS; other platforms are experimental)
+- macOS 12+
 - Rust toolchain
 - Node.js 18+ with npm
 - Xcode command-line tools & Tauri prerequisites (<https://tauri.app/start/prerequisites/>)
