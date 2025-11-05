@@ -514,10 +514,7 @@ impl SearchCache {
         WalkData::new(self.ignore_path, false, self.cancel)
     }
 
-    pub fn rescan_with_walk_data(
-        &mut self,
-        walk_data: &WalkData,
-    ) -> Option<()> {
+    pub fn rescan_with_walk_data(&mut self, walk_data: &WalkData) -> Option<()> {
         let Some(new_cache) = Self::walk_fs_with_walk_data(
             self.path.clone(),
             walk_data,
