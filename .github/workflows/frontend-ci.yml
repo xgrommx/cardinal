@@ -38,7 +38,7 @@ jobs:
         run: npm run format:check
 
       - name: Run unit tests
-        run: npm test -- --runInBand
+        run: npm test
 
       - name: Build application
         run: npm run build
