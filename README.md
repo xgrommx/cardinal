@@ -4,7 +4,7 @@
   <p>A fast file searching tool for macOS.</p>
   <p>
     <a href="#using-cardinal">Using Cardinal</a> ·
-    <a href="#running-cardinal">Building Cardinal</a>
+    <a href="#building-cardinal">Building Cardinal</a>
   </p>
   <img src="doc/UI.gif" alt="Cardinal UI preview" width="720">
 </div>
