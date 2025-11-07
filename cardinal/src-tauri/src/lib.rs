@@ -288,8 +288,8 @@ fn run_background_event_loop(
                 icon_jobs
                     .into_iter()
                     .map(|(slab_index, path)| (slab_index, path.to_string_lossy().into_owned()))
-                    // Filter out OneDrive paths to avoid triggering file download
-                    .filter(|(_, path)| !path.contains("OneDrive"))
+                    // Filter out OneDrive&iCloud paths to avoid triggering file download
+                    .filter(|(_, path)| !path.contains("OneDrive") && !path.contains("com~apple~CloudDocs"))
                     .for_each(|(slab_index, path)| {
                         let icon_update_tx = icon_update_tx.clone();
                         spawn(move || {
