@@ -115,6 +115,15 @@ function App() {
     void checkFullDiskAccess();
   }, []);
 
+  const focusSearchInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      const input = searchInputRef.current;
+      if (!input) return;
+      input.focus();
+      input.select();
+    });
+  }, []);
+
   useEffect(() => {
     isMountedRef.current = true;
     let unlistenStatus: UnlistenFn | undefined;
@@ -139,12 +148,7 @@ function App() {
 
       unlistenQuickLaunch = await listen('quick_launch', () => {
         if (!isMountedRef.current) return;
-        requestAnimationFrame(() => {
-          const input = searchInputRef.current;
-          if (!input) return;
-          input.focus();
-          input.select();
-        });
+        focusSearchInput();
       });
     };
 
@@ -156,7 +160,11 @@ function App() {
       unlistenLifecycle?.();
       unlistenQuickLaunch?.();
     };
-  }, [handleStatusUpdate, setLifecycleState]);
+  }, [focusSearchInput, handleStatusUpdate, setLifecycleState]);
+
+  useEffect(() => {
+    focusSearchInput();
+  }, [focusSearchInput]);
 
   const onQueryChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
