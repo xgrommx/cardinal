@@ -1,4 +1,5 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod window_controls;
+
 use anyhow::{Context, Result};
 use base64::{Engine as _, engine::general_purpose};
 use cardinal_sdk::{EventFlag, EventWatcher};
@@ -17,10 +18,11 @@ use std::{
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
 use tracing::{error, info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
+use window_controls::{WindowToggle, activate_window, hide_window, toggle_window};
 
 static CACHE_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
     directories::ProjectDirs::from("", "", "Cardinal")
@@ -81,70 +83,6 @@ fn update_app_state(app_handle: &tauri::AppHandle, state: AppLifecycleState) {
     }
     store_app_state(state);
     emit_app_state(app_handle);
-}
-
-fn ensure_main_window_visible<R: Runtime>(app_handle: &AppHandle<R>) -> Option<WebviewWindow<R>> {
-    let window = app_handle.get_webview_window("main")?;
-
-    if let Ok(true) = window.is_minimized() {
-        if let Err(err) = window.unminimize() {
-            error!(?err, "Failed to unminimize window");
-        }
-    }
-
-    if let Ok(false) = window.is_visible() {
-        if let Err(err) = window.show() {
-            error!(?err, "Failed to show window");
-        }
-    }
-
-    if let Err(err) = window.set_focus() {
-        error!(?err, "Failed to focus window");
-    }
-
-    Some(window)
-}
-
-fn hide_main_window<R: Runtime>(app_handle: &AppHandle<R>) -> bool {
-    if let Some(window) = app_handle.get_webview_window("main") {
-        if let Err(err) = window.hide() {
-            error!(?err, "Failed to hide main window");
-            return false;
-        }
-        return true;
-    }
-
-    warn!("Hide requested but main window is unavailable");
-    false
-}
-
-fn toggle_main_window<R: Runtime>(app_handle: &AppHandle<R>) {
-    let Some(window) = app_handle.get_webview_window("main") else {
-        warn!("Toggle requested but main window is unavailable");
-        return;
-    };
-
-    let is_visible = window.is_visible().unwrap_or(true);
-    let is_minimized = window.is_minimized().unwrap_or(false);
-
-    if is_visible && !is_minimized {
-        if hide_main_window(app_handle) {
-            info!("Global shortcut hid the Cardinal window");
-        }
-    } else {
-        trigger_quick_launch(app_handle);
-    }
-}
-
-fn trigger_quick_launch<R: Runtime>(app_handle: &AppHandle<R>) {
-    let Some(window) = ensure_main_window_visible(app_handle) else {
-        error!("Quick launch shortcut triggered but main window is unavailable");
-        return;
-    };
-
-    if let Err(err) = window.emit("quick_launch", ()) {
-        error!(?err, "Failed to emit quick launch event");
-    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
@@ -603,7 +541,12 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
         .on_tray_icon_event(|tray, tray_event| {
             if let TrayIconEvent::Click { button, .. } = tray_event {
                 if matches!(button, MouseButton::Left) {
-                    ensure_main_window_visible(tray.app_handle());
+                    let app_handle = tray.app_handle();
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        activate_window(&window);
+                    } else {
+                        warn!("Tray click requested but main window is unavailable");
+                    }
                 }
             }
         });
@@ -645,7 +588,14 @@ pub fn run() -> Result<()> {
         .expect("invalid quick launch shortcut definition")
         .with_handler(|app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
-                toggle_main_window(app);
+                let Some(window) = app.get_webview_window("main") else {
+                    warn!("Toggle requested but main window is unavailable");
+                    return;
+                };
+
+                if matches!(toggle_window(&window), WindowToggle::Hidden) {
+                    info!("Global shortcut hid the Cardinal window");
+                }
             }
         })
         .build();
@@ -664,16 +614,23 @@ pub fn run() -> Result<()> {
                 return;
             }
 
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                if EXIT_REQUESTED.load(Ordering::Relaxed) {
-                    return;
-                }
+            let WindowEvent::CloseRequested { api, .. } = event else {
+                return;
+            };
 
-                api.prevent_close();
-                let app_handle = window.app_handle();
-                if hide_main_window(app_handle) {
-                    info!("Main window hidden; Cardinal keeps running in the background");
-                }
+            if EXIT_REQUESTED.load(Ordering::Relaxed) {
+                return;
+            }
+
+            api.prevent_close();
+
+            let Some(window) = window.get_webview_window("main") else {
+                warn!("Close requested but main window is unavailable");
+                return;
+            };
+
+            if hide_window(&window) {
+                info!("Main window hidden; Cardinal keeps running in the background");
             }
         });
     // Run the Tauri application.
@@ -879,7 +836,11 @@ pub fn run() -> Result<()> {
                     ..
                 } => {
                     if !has_visible_windows {
-                        ensure_main_window_visible(app_handle);
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            activate_window(&window);
+                        } else {
+                            warn!("Reopen requested but main window is unavailable");
+                        }
                     }
                 }
                 _ => (),
