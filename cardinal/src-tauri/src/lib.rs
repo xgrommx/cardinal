@@ -34,8 +34,6 @@ static CACHE_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
 static APP_QUIT: AtomicBool = AtomicBool::new(false);
 static EXIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 const QUICK_LAUNCH_SHORTCUT: &str = "CmdOrCtrl+Shift+Space";
-
-#[cfg(desktop)]
 const TRAY_MENU_QUIT_ID: &str = "tray.quit_cardinal";
 
 #[repr(u8)]
@@ -579,7 +577,6 @@ fn open_in_finder(path: String) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(desktop)]
 fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::{
         menu::{MenuBuilder, MenuItemBuilder},
@@ -700,7 +697,6 @@ pub fn run() -> Result<()> {
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
 
-    #[cfg(desktop)]
     setup_tray(&app).expect("failed to initialize system tray");
 
     let app_handle = &app.handle().to_owned();
