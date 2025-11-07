@@ -237,6 +237,21 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeTab, selectedPath]);
 
+  useEffect(() => {
+    const handleSearchFocusShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
+        const key = event.key.toLowerCase();
+        if (key === 'f') {
+          event.preventDefault();
+          focusSearchInput();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleSearchFocusShortcut);
+    return () => window.removeEventListener('keydown', handleSearchFocusShortcut);
+  }, [focusSearchInput]);
+
   const onQueryChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const inputValue = e.target.value;
