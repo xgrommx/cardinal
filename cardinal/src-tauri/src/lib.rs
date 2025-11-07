@@ -5,7 +5,9 @@ mod tray;
 mod window_controls;
 
 use anyhow::{Context, Result};
-use background::{IconPayload, emit_status_bar_update, run_background_event_loop};
+use background::{
+    BackgroundLoopChannels, IconPayload, emit_status_bar_update, run_background_event_loop,
+};
 use cardinal_sdk::EventWatcher;
 use commands::{
     SearchJob, SearchState, get_app_status, get_nodes_info, open_in_finder, search, trigger_rescan,
@@ -233,14 +235,16 @@ pub fn run() -> Result<()> {
                 app_handle,
                 cache,
                 event_watcher,
-                finish_rx,
-                search_rx,
-                result_tx,
-                node_info_rx,
-                node_info_results_tx,
-                icon_viewport_rx,
-                rescan_rx,
-                icon_update_tx,
+                BackgroundLoopChannels {
+                    finish_rx,
+                    search_rx,
+                    result_tx,
+                    node_info_rx,
+                    node_info_results_tx,
+                    icon_viewport_rx,
+                    rescan_rx,
+                    icon_update_tx,
+                },
                 WATCH_ROOT,
                 FSE_LATENCY_SECS,
             );

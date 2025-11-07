@@ -31,6 +31,17 @@ pub struct IconPayload {
     pub icon: String,
 }
 
+pub struct BackgroundLoopChannels {
+    pub finish_rx: Receiver<Sender<Option<SearchCache>>>,
+    pub search_rx: Receiver<SearchJob>,
+    pub result_tx: Sender<AnyhowResult<Vec<SlabIndex>>>,
+    pub node_info_rx: Receiver<Vec<SlabIndex>>,
+    pub node_info_results_tx: Sender<Vec<SearchResultNode>>,
+    pub icon_viewport_rx: Receiver<(u64, Vec<SlabIndex>)>,
+    pub rescan_rx: Receiver<()>,
+    pub icon_update_tx: Sender<IconPayload>,
+}
+
 pub fn emit_status_bar_update(
     app_handle: &AppHandle,
     scanned_files: usize,
@@ -67,17 +78,20 @@ pub fn run_background_event_loop(
     app_handle: &AppHandle,
     mut cache: SearchCache,
     mut event_watcher: EventWatcher,
-    finish_rx: Receiver<Sender<Option<SearchCache>>>,
-    search_rx: Receiver<SearchJob>,
-    result_tx: Sender<AnyhowResult<Vec<SlabIndex>>>,
-    node_info_rx: Receiver<Vec<SlabIndex>>,
-    node_info_results_tx: Sender<Vec<SearchResultNode>>,
-    icon_viewport_rx: Receiver<(u64, Vec<SlabIndex>)>,
-    rescan_rx: Receiver<()>,
-    icon_update_tx: Sender<IconPayload>,
+    channels: BackgroundLoopChannels,
     watch_root: &str,
     fse_latency_secs: f64,
 ) {
+    let BackgroundLoopChannels {
+        finish_rx,
+        search_rx,
+        result_tx,
+        node_info_rx,
+        node_info_results_tx,
+        icon_viewport_rx,
+        rescan_rx,
+        icon_update_tx,
+    } = channels;
     let mut processed_events = 0usize;
     let mut history_ready = matches!(load_app_state(), AppLifecycleState::Ready);
     loop {
