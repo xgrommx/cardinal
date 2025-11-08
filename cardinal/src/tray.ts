@@ -33,9 +33,8 @@ async function createTray(): Promise<void> {
     id: TRAY_ID,
     menu,
     tooltip: 'Cardinal',
-    showMenuOnLeftClick: false,
     action: handleTrayAction,
-    icon: await defaultWindowIcon() ?? undefined
+    icon: (await defaultWindowIcon()) ?? undefined,
   };
 
   trayIcon = await TrayIcon.new(options);
