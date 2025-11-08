@@ -1,10 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
 import './i18n/config';
+import App from './App';
+import { initializeTray } from './tray';
 import { initializeThemePreference } from './theme';
 
 initializeThemePreference();
+void initializeTray();
 
 const rootElement = document.getElementById('root');
 

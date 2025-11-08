@@ -1,7 +1,6 @@
 mod background;
 mod commands;
 mod lifecycle;
-mod tray;
 mod window_controls;
 
 use anyhow::{Context, Result};
@@ -11,7 +10,7 @@ use background::{
 use cardinal_sdk::EventWatcher;
 use commands::{
     SearchJob, SearchState, get_app_status, get_nodes_info, open_in_finder, preview_with_quicklook,
-    search, trigger_rescan, update_icon_viewport,
+    request_app_exit, search, trigger_rescan, update_icon_viewport,
 };
 use crossbeam_channel::{Sender, bounded, unbounded};
 use lifecycle::{
@@ -30,7 +29,6 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, WindowEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::EnvFilter;
-use tray::setup_tray;
 use window_controls::{WindowToggle, activate_window, hide_window, toggle_window};
 
 static CACHE_PATH: LazyLock<PathBuf> = LazyLock::new(|| {
@@ -130,12 +128,11 @@ pub fn run() -> Result<()> {
             get_app_status,
             trigger_rescan,
             open_in_finder,
-            preview_with_quicklook
+            preview_with_quicklook,
+            request_app_exit
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");
-
-    setup_tray(&app).expect("failed to initialize system tray");
 
     let app_handle = &app.handle().to_owned();
     emit_app_state(app_handle);

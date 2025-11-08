@@ -94,5 +94,8 @@
       "light": "ライト",
       "dark": "ダーク"
     }
+  },
+  "tray": {
+    "quit": "Cardinal を終了"
   }
 }

@@ -94,5 +94,8 @@
       "light": "Claro",
       "dark": "Oscuro"
     }
+  },
+  "tray": {
+    "quit": "Salir de Cardinal"
   }
 }

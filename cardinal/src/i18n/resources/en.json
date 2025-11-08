@@ -94,5 +94,8 @@
       "light": "Light",
       "dark": "Dark"
     }
+  },
+  "tray": {
+    "quit": "Quit Cardinal"
   }
 }

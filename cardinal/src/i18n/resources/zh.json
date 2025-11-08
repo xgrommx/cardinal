@@ -93,5 +93,8 @@
       "light": "浅色模式",
       "dark": "深色模式"
     }
+  },
+  "tray": {
+    "quit": "退出 Cardinal"
   }
 }

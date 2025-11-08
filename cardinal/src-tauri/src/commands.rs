@@ -1,11 +1,11 @@
-use crate::lifecycle::load_app_state;
+use crate::lifecycle::{EXIT_REQUESTED, load_app_state};
 use anyhow::Result;
 use base64::{Engine as _, engine::general_purpose};
 use crossbeam_channel::{Receiver, Sender};
 use search_cache::{SearchOptions, SearchResultNode, SlabIndex, SlabNodeMetadata};
 use serde::{Deserialize, Serialize};
-use std::process::Command;
-use tauri::State;
+use std::{process::Command, sync::atomic::Ordering};
+use tauri::{AppHandle, State};
 
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -197,5 +197,12 @@ pub fn preview_with_quicklook(path: String) -> Result<(), String> {
         .arg(&path)
         .spawn()
         .map_err(|e| format!("Failed to launch Quick Look preview: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn request_app_exit(app_handle: AppHandle) -> Result<(), String> {
+    EXIT_REQUESTED.store(true, Ordering::Relaxed);
+    app_handle.exit(0);
     Ok(())
 }

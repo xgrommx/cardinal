@@ -94,5 +94,8 @@
       "light": "Hell",
       "dark": "Dunkel"
     }
+  },
+  "tray": {
+    "quit": "Cardinal beenden"
   }
 }

@@ -5,6 +5,8 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:app:allow-default-window-icon",
+    "core:window:allow-set-focus",
     "opener:default",
     "macos-permissions:default",
     "global-shortcut:default"
