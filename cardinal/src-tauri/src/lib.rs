@@ -142,6 +142,16 @@ pub fn run() -> Result<()> {
         .expect("error while running tauri application");
 
     let app_handle = &app.handle().to_owned();
+    let channels = BackgroundLoopChannels {
+        finish_rx,
+        search_rx,
+        result_tx,
+        node_info_rx,
+        node_info_results_tx,
+        icon_viewport_rx,
+        rescan_rx,
+        icon_update_tx,
+    };
     emit_app_state(app_handle);
     let icon_update_rx = &icon_update_rx;
     std::thread::scope(move |s| {
@@ -163,17 +173,7 @@ pub fn run() -> Result<()> {
                 return;
             }
 
-            run_logic_thread(
-                app_handle,
-                finish_rx,
-                search_rx,
-                result_tx,
-                node_info_rx,
-                node_info_results_tx,
-                icon_viewport_rx,
-                rescan_rx,
-                icon_update_tx,
-            );
+            run_logic_thread(app_handle, channels);
         });
 
         app.run(move |app_handle, event| match event {
@@ -217,17 +217,7 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
-fn run_logic_thread(
-    app_handle: &tauri::AppHandle,
-    finish_rx: Receiver<Sender<Option<SearchCache>>>,
-    search_rx: Receiver<SearchJob>,
-    result_tx: Sender<anyhow::Result<Vec<SlabIndex>>>,
-    node_info_rx: Receiver<Vec<SlabIndex>>,
-    node_info_results_tx: Sender<Vec<SearchResultNode>>,
-    icon_viewport_rx: Receiver<(u64, Vec<SlabIndex>)>,
-    rescan_rx: Receiver<()>,
-    icon_update_tx: Sender<IconPayload>,
-) {
+fn run_logic_thread(app_handle: &tauri::AppHandle, channels: BackgroundLoopChannels) {
     const WATCH_ROOT: &str = "/";
     const FSE_LATENCY_SECS: f64 = 0.1;
     let path = PathBuf::from(WATCH_ROOT);
@@ -271,7 +261,8 @@ fn run_logic_thread(
 
             let Some(cache) = cache else {
                 info!("Walk filesystem cancelled, app quitting");
-                finish_rx
+                channels
+                    .finish_rx
                     .recv()
                     .expect("Failed to receive finish signal")
                     .send(None)
@@ -299,16 +290,7 @@ fn run_logic_thread(
         app_handle,
         cache,
         event_watcher,
-        BackgroundLoopChannels {
-            finish_rx,
-            search_rx,
-            result_tx,
-            node_info_rx,
-            node_info_results_tx,
-            icon_viewport_rx,
-            rescan_rx,
-            icon_update_tx,
-        },
+        channels,
         WATCH_ROOT,
         FSE_LATENCY_SECS,
     );
