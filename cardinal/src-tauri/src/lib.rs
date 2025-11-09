@@ -10,15 +10,14 @@ use background::{
 use cardinal_sdk::EventWatcher;
 use commands::{
     SearchJob, SearchState, get_app_status, get_nodes_info, open_in_finder, preview_with_quicklook,
-    request_app_exit, search, trigger_rescan, update_icon_viewport,
-    start_logic,
+    request_app_exit, search, start_logic, trigger_rescan, update_icon_viewport,
 };
-use crossbeam_channel::{Receiver, Sender, bounded, unbounded, RecvTimeoutError};
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded, unbounded};
 use lifecycle::{
     APP_QUIT, AppLifecycleState, EXIT_REQUESTED, emit_app_state, load_app_state, update_app_state,
 };
-use search_cache::{SearchCache, SearchResultNode, SlabIndex, WalkData};
 use once_cell::sync::OnceCell;
+use search_cache::{SearchCache, SearchResultNode, SlabIndex, WalkData};
 use std::{
     path::PathBuf,
     sync::{
@@ -164,96 +163,17 @@ pub fn run() -> Result<()> {
                 return;
             }
 
-            const WATCH_ROOT: &str = "/";
-            const FSE_LATENCY_SECS: f64 = 0.1;
-            let path = PathBuf::from(WATCH_ROOT);
-            let ignore_paths = vec![PathBuf::from("/System/Volumes/Data")];
-
-            let mut cache = match SearchCache::try_read_persistent_cache(
-                &path,
-                &CACHE_PATH,
-                Some(ignore_paths.clone()),
-                Some(&APP_QUIT),
-            ) {
-                Ok(cached) => {
-                    info!("Loaded existing cache");
-                    emit_status_bar_update(app_handle, cached.get_total_files(), 0);
-                    cached
-                }
-                Err(e) => {
-                    info!("Walking filesystem: {:?}", e);
-                    let walk_data = WalkData::new(
-                        Some(ignore_paths.clone()),
-                        false,
-                        Some(&APP_QUIT),
-                    );
-                    let walking_done = AtomicBool::new(false);
-                    let cache = std::thread::scope(|s| {
-                        s.spawn(|| {
-                            while !walking_done.load(Ordering::Relaxed) {
-                                let dirs = walk_data.num_dirs.load(Ordering::Relaxed);
-                                let files = walk_data.num_files.load(Ordering::Relaxed);
-                                let total = dirs + files;
-                                emit_status_bar_update(app_handle, total, 0);
-                                std::thread::sleep(Duration::from_millis(100));
-                            }
-                        });
-                        let cache = SearchCache::walk_fs_with_walk_data(
-                            path.clone(),
-                            &walk_data,
-                            Some(ignore_paths.clone()),
-                            Some(&APP_QUIT),
-                        );
-
-                        walking_done.store(true, Ordering::Relaxed);
-                        cache
-                    });
-
-                    let Some(cache) = cache else {
-                        info!("Walk filesystem cancelled, app quitting");
-                        finish_rx
-                            .recv()
-                            .expect("Failed to receive finish signal")
-                            .send(None)
-                            .expect("Failed to send None cache");
-                        return;
-                    };
-
-                    emit_status_bar_update(app_handle, cache.get_total_files(), 0);
-
-                    cache
-                }
-            };
-
-            let event_watcher = EventWatcher::spawn(
-                WATCH_ROOT.to_string(),
-                cache.last_event_id(),
-                FSE_LATENCY_SECS,
-            )
-            .1;
-            if load_app_state() != AppLifecycleState::Ready {
-                update_app_state(app_handle, AppLifecycleState::Updating);
-            }
-            info!("Started background processing thread");
-            run_background_event_loop(
+            run_logic_thread(
                 app_handle,
-                cache,
-                event_watcher,
-                BackgroundLoopChannels {
-                    finish_rx,
-                    search_rx,
-                    result_tx,
-                    node_info_rx,
-                    node_info_results_tx,
-                    icon_viewport_rx,
-                    rescan_rx,
-                    icon_update_tx,
-                },
-                WATCH_ROOT,
-                FSE_LATENCY_SECS,
+                finish_rx,
+                search_rx,
+                result_tx,
+                node_info_rx,
+                node_info_results_tx,
+                icon_viewport_rx,
+                rescan_rx,
+                icon_update_tx,
             );
-
-            info!("Background thread exited");
         });
 
         app.run(move |app_handle, event| match event {
@@ -295,6 +215,105 @@ pub fn run() -> Result<()> {
     });
 
     Ok(())
+}
+
+fn run_logic_thread(
+    app_handle: &tauri::AppHandle,
+    finish_rx: Receiver<Sender<Option<SearchCache>>>,
+    search_rx: Receiver<SearchJob>,
+    result_tx: Sender<anyhow::Result<Vec<SlabIndex>>>,
+    node_info_rx: Receiver<Vec<SlabIndex>>,
+    node_info_results_tx: Sender<Vec<SearchResultNode>>,
+    icon_viewport_rx: Receiver<(u64, Vec<SlabIndex>)>,
+    rescan_rx: Receiver<()>,
+    icon_update_tx: Sender<IconPayload>,
+) {
+    const WATCH_ROOT: &str = "/";
+    const FSE_LATENCY_SECS: f64 = 0.1;
+    let path = PathBuf::from(WATCH_ROOT);
+    let ignore_paths = vec![PathBuf::from("/System/Volumes/Data")];
+
+    let mut cache = match SearchCache::try_read_persistent_cache(
+        &path,
+        &CACHE_PATH,
+        Some(ignore_paths.clone()),
+        Some(&APP_QUIT),
+    ) {
+        Ok(cached) => {
+            info!("Loaded existing cache");
+            emit_status_bar_update(app_handle, cached.get_total_files(), 0);
+            cached
+        }
+        Err(e) => {
+            info!("Walking filesystem: {:?}", e);
+            let walk_data = WalkData::new(Some(ignore_paths.clone()), false, Some(&APP_QUIT));
+            let walking_done = AtomicBool::new(false);
+            let cache = std::thread::scope(|s| {
+                s.spawn(|| {
+                    while !walking_done.load(Ordering::Relaxed) {
+                        let dirs = walk_data.num_dirs.load(Ordering::Relaxed);
+                        let files = walk_data.num_files.load(Ordering::Relaxed);
+                        let total = dirs + files;
+                        emit_status_bar_update(app_handle, total, 0);
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+                });
+                let cache = SearchCache::walk_fs_with_walk_data(
+                    path.clone(),
+                    &walk_data,
+                    Some(ignore_paths.clone()),
+                    Some(&APP_QUIT),
+                );
+
+                walking_done.store(true, Ordering::Relaxed);
+                cache
+            });
+
+            let Some(cache) = cache else {
+                info!("Walk filesystem cancelled, app quitting");
+                finish_rx
+                    .recv()
+                    .expect("Failed to receive finish signal")
+                    .send(None)
+                    .expect("Failed to send None cache");
+                return;
+            };
+
+            emit_status_bar_update(app_handle, cache.get_total_files(), 0);
+
+            cache
+        }
+    };
+
+    let event_watcher = EventWatcher::spawn(
+        WATCH_ROOT.to_string(),
+        cache.last_event_id(),
+        FSE_LATENCY_SECS,
+    )
+    .1;
+    if load_app_state() != AppLifecycleState::Ready {
+        update_app_state(app_handle, AppLifecycleState::Updating);
+    }
+    info!("Started background processing thread");
+    run_background_event_loop(
+        app_handle,
+        cache,
+        event_watcher,
+        BackgroundLoopChannels {
+            finish_rx,
+            search_rx,
+            result_tx,
+            node_info_rx,
+            node_info_results_tx,
+            icon_viewport_rx,
+            rescan_rx,
+            icon_update_tx,
+        },
+        WATCH_ROOT,
+        FSE_LATENCY_SECS,
+    );
+
+    info!("Background thread exited");
 }
 
 fn flush_cache_to_file_once(finish_tx: &Sender<Sender<Option<SearchCache>>>) {
