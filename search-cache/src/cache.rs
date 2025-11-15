@@ -3,7 +3,7 @@ use crate::{
     SlabNodeMetadataCompact, State, ThinSlab,
     persistent::{PersistentStorage, read_cache_from_file, write_cache_to_file},
 };
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow};
 use cardinal_sdk::{EventFlag, FsEvent, ScanType, current_event_id};
 use cardinal_syntax::parse_query;
 use fswalk::{Node, NodeMetadata, WalkData, walk_it};
@@ -1568,12 +1568,9 @@ mod tests {
     fn test_query_files_empty_query_string() {
         let temp_dir = TempDir::new("test_query_files_empty_q").unwrap();
         let mut cache = SearchCache::walk_fs(temp_dir.path().to_path_buf());
-        // search_with_options() rejects empty queries; callers should use search_empty instead.
+        // Empty queries match everything.
         let result = cache.query_files("".to_string(), CancellationToken::noop());
-        assert!(
-            result.is_err(),
-            "Empty query string should result in an error"
-        );
+        assert!(result.is_ok(), "empty query should succeed");
     }
 
     #[test]

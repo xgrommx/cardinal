@@ -78,9 +78,6 @@ impl SearchCache {
         }
         let mut result: Vec<SlabIndex> = Vec::new();
         for part in parts {
-            if matches!(part, Expr::Empty) {
-                continue;
-            }
             let candidate = self.evaluate_expr(part, options, token)?;
             let Some(nodes) = candidate else {
                 return Ok(None);

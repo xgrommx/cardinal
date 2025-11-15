@@ -20,13 +20,6 @@
 use std::fmt;
 
 /// Parses an Everything-like query string into a structured expression tree.
-///
-/// The parser mirrors the precedence and tokenization rules documented in
-/// `target/everything.md`, keeping the grammar intentionally small so other
-/// crates can decide how best to interpret each node (e.g. turn filters into
-/// API calls, map terms onto rankings, etc.). All whitespace handling, boolean
-/// operators, and filter quirks live here so downstream components only work
-/// with normalized data.
 pub fn parse_query(input: &str) -> Result<Query, ParseError> {
     if let Some(result) = try_parse_regex_query(input) {
         return result;
@@ -693,26 +686,30 @@ impl<'a> Parser<'a> {
     // a normalized structure regardless of how many terms are chained.
     fn parse_and(&mut self) -> Result<Expr, ParseError> {
         let mut parts = Vec::new();
+        let mut pending_keyword_and = false;
         loop {
             self.skip_ws();
-            if self.eof() || self.is_at_group_close() {
-                break;
-            }
             if self.consume_keyword("AND") {
                 if parts.is_empty() {
-                    return Err(self.error("missing expression before AND"));
+                    parts.push(Expr::Empty);
                 }
+                pending_keyword_and = true;
                 continue;
             }
-            if matches!(self.peek_char(), Some('|')) {
+            if self.eof() || self.is_at_group_close() {
+                if pending_keyword_and {
+                    parts.push(Expr::Empty);
+                }
                 break;
             }
-
             let expr = self.parse_or()?;
             if matches!(expr, Expr::Empty) {
                 break;
             }
             parts.push(expr);
+            if pending_keyword_and {
+                pending_keyword_and = false;
+            }
         }
 
         match parts.len() {
@@ -726,37 +723,29 @@ impl<'a> Parser<'a> {
     // the vector accumulator, mirroring how Everything evaluates `|`.
     fn parse_or(&mut self) -> Result<Expr, ParseError> {
         let mut parts = Vec::new();
-        let first = self.parse_not()?;
-        if matches!(first, Expr::Empty) {
-            return Ok(first);
-        }
-        parts.push(first);
-
         loop {
             self.skip_ws();
-            let mut matched = false;
-            if self.peek_char() == Some('|') {
-                if parts.is_empty() {
-                    return Err(self.error("missing expression before '|'"));
-                }
-                self.advance_char();
-                matched = true;
-            } else if self.consume_keyword("OR") {
-                if parts.is_empty() {
-                    return Err(self.error("missing expression before OR"));
-                }
-                matched = true;
+            let operand_is_empty =
+                self.peek_char() == Some('|') || self.eof() || self.is_at_group_close();
+            if operand_is_empty {
+                parts.push(Expr::Empty);
+            } else {
+                parts.push(self.parse_not()?);
             }
+
+            self.skip_ws();
+            let matched = if self.peek_char() == Some('|') {
+                self.advance_char();
+                true
+            } else if self.consume_keyword("OR") {
+                true
+            } else {
+                false
+            };
 
             if !matched {
                 break;
             }
-
-            let rhs = self.parse_not()?;
-            if matches!(rhs, Expr::Empty) {
-                return Err(self.error("missing expression after OR"));
-            }
-            parts.push(rhs);
         }
 
         if parts.len() == 1 {
@@ -1338,15 +1327,22 @@ mod tests {
         let Expr::And(parts) = query.expr else {
             panic!("expected conjunction");
         };
-        assert_eq!(parts.len(), 2);
+        assert_eq!(
+            parts,
+            vec![Expr::And(vec![word("foo"), word("bar")]), word("baz")]
+        );
+    }
 
-        let Expr::And(group_parts) = &parts[0] else {
-            panic!("expected grouped conjunction");
-        };
-        assert_eq!(group_parts.len(), 2);
-        assert_eq!(group_parts[0], word("foo"));
-        assert_eq!(group_parts[1], word("bar"));
-        assert_eq!(parts[1], word("baz"));
+    #[test]
+    fn parses_and_with_leading_empty_operand() {
+        let query = parse_query("  AND foo").unwrap();
+        assert_eq!(query.expr, Expr::And(vec![Expr::Empty, word("foo")]));
+    }
+
+    #[test]
+    fn parses_and_with_trailing_empty_operand() {
+        let query = parse_query("foo AND ").unwrap();
+        assert_eq!(query.expr, Expr::And(vec![word("foo"), Expr::Empty]));
     }
 
     #[test]
@@ -1370,6 +1366,48 @@ mod tests {
         assert_eq!(region[0], word("bar"));
         assert_eq!(region[1], word("baz"));
         assert_eq!(parts[1], word("qux"));
+    }
+
+    #[test]
+    fn parses_or_with_trailing_empty_operand() {
+        let query = parse_query("kksk | ").unwrap();
+        assert_eq!(query.expr, Expr::Or(vec![word("kksk"), Expr::Empty]));
+    }
+
+    #[test]
+    fn parses_or_with_only_empty_operands() {
+        let query = parse_query(" | ").unwrap();
+        assert_eq!(query.expr, Expr::Or(vec![Expr::Empty, Expr::Empty]));
+    }
+
+    #[test]
+    fn parses_or_with_leading_empty_operand() {
+        let query = parse_query("| foo").unwrap();
+        assert_eq!(query.expr, Expr::Or(vec![Expr::Empty, word("foo")]));
+    }
+
+    #[test]
+    fn parses_and_with_only_empty_operands() {
+        let query = parse_query(" AND ").unwrap();
+        assert_eq!(query.expr, Expr::And(vec![Expr::Empty, Expr::Empty]));
+    }
+
+    #[test]
+    fn parses_or_with_consecutive_separators() {
+        let query = parse_query("foo||bar").unwrap();
+        assert_eq!(
+            query.expr,
+            Expr::Or(vec![word("foo"), Expr::Empty, word("bar")])
+        );
+    }
+
+    #[test]
+    fn parses_or_with_empty_operands_on_both_sides() {
+        let query = parse_query("| foo |").unwrap();
+        assert_eq!(
+            query.expr,
+            Expr::Or(vec![Expr::Empty, word("foo"), Expr::Empty])
+        );
     }
 
     #[test]
@@ -1492,9 +1530,6 @@ mod tests {
 
     #[test]
     fn parses_all_manual_examples() {
-        // This list mirrors every literal Everything query shown inside
-        // `target/everything.md`. Treating it as a regression suite guards the
-        // parser against accidentally drifting away from the documented syntax.
         const EXAMPLES: &[DocExample] = &[
             DocExample {
                 line: 9,
