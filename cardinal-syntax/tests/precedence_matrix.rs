@@ -52,10 +52,10 @@ fn or_has_higher_precedence_than_and() {
     for (src, and_len, validators) in cases {
         let q = parse_query(src).unwrap();
         let (parts, is_and) = top_is_and(&q.expr);
-        assert!(is_and, "top should be AND for `{}`", src);
-        assert_eq!(parts.len(), and_len, "AND arity for `{}`", src);
+        assert!(is_and, "top should be AND for `{src}`");
+        assert_eq!(parts.len(), and_len, "AND arity for `{src}`");
         for (e, check) in parts.iter().zip(validators.into_iter()) {
-            assert!(check(e), "validator failed for query `{}`: {e:?}", src);
+            assert!(check(e), "validator failed for query `{src}`: {e:?}");
         }
     }
 }
@@ -103,10 +103,10 @@ fn not_binds_tighter_than_or_and() {
     for (src, validators) in cases {
         let q = parse_query(src).unwrap();
         let (parts, is_and) = top_is_and(&q.expr);
-        assert!(is_and, "expected AND at top for `{}`", src);
+        assert!(is_and, "expected AND at top for `{src}`");
         assert_eq!(parts.len(), validators.len());
         for (e, check) in parts.iter().zip(validators.into_iter()) {
-            assert!(check(e), "failed validator for `{}`: {e:?}", src);
+            assert!(check(e), "failed validator for `{src}`: {e:?}");
         }
     }
 }
