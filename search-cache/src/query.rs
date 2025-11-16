@@ -9,10 +9,7 @@ use hashbrown::HashSet;
 use query_segmentation::query_segmentation;
 use regex::RegexBuilder;
 use search_cancel::CancellationToken;
-use std::{
-    collections::BTreeSet,
-    path::{Component, Path, PathBuf},
-};
+use std::{collections::BTreeSet, path::PathBuf};
 
 const CANCEL_CHECK_INTERVAL: usize = 0x10000;
 
@@ -318,17 +315,16 @@ impl SearchCache {
     fn evaluate_parent_filter(
         &self,
         argument: &FilterArgument,
-        token: CancellationToken,
+        _token: CancellationToken,
     ) -> Result<Option<Vec<SlabIndex>>> {
-        let target = self.resolve_query_path(&argument.raw);
-        let Some(nodes) = self.search_empty(token) else {
-            return Ok(None);
+        let target = self.resolve_query_path(&argument.raw)?;
+        let Some(target) = self.node_index_for_raw_path(&target) else {
+            bail!(
+                "Parent filter {:?} is not found in file system",
+                argument.raw
+            );
         };
-        Ok(filter_nodes(nodes, token, |index| {
-            self.node_parent_path(index)
-                .map(|parent| parent == target)
-                .unwrap_or(false)
-        }))
+        Ok(Some(self.file_nodes[target].children.to_vec()))
     }
 
     fn evaluate_infolder_filter(
@@ -336,31 +332,26 @@ impl SearchCache {
         argument: &FilterArgument,
         token: CancellationToken,
     ) -> Result<Option<Vec<SlabIndex>>> {
-        let target = self.resolve_query_path(&argument.raw);
-        let Some(nodes) = self.search_empty(token) else {
-            return Ok(None);
+        let target = self.resolve_query_path(&argument.raw)?;
+        let Some(target) = self.node_index_for_raw_path(&target) else {
+            bail!(
+                "Parent filter {:?} is not found in file system",
+                argument.raw
+            );
         };
-        Ok(filter_nodes(nodes, token, |index| {
-            self.file_nodes
-                .node_path(index)
-                .is_some_and(|path| path.starts_with(&target) && path != target)
-        }))
+        Ok(self.all_subnodes(target, token))
     }
 
-    fn node_parent_path(&self, index: SlabIndex) -> Option<PathBuf> {
-        let parent = self.file_nodes[index].name_and_parent.parent()?;
-        self.file_nodes.node_path(parent)
-    }
-
-    fn resolve_query_path(&self, raw: &str) -> PathBuf {
-        let trimmed = raw.trim();
-        let candidate = PathBuf::from(trimmed);
-        let joined = if candidate.is_absolute() {
-            candidate
-        } else {
-            self.file_nodes.path().join(candidate)
-        };
-        normalize_path(&joined)
+    fn resolve_query_path(&self, raw: &str) -> Result<PathBuf> {
+        let raw = PathBuf::from(raw);
+        if !raw.starts_with(self.file_nodes.path()) {
+            bail!(
+                "Query path {:?} is outside of the indexed root {:?}",
+                raw,
+                self.file_nodes.path()
+            );
+        }
+        Ok(raw)
     }
 }
 
@@ -497,25 +488,6 @@ fn union_in_place(
         }
     }
     Some(())
-}
-
-fn normalize_path(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::RootDir | Component::Normal(_) => {
-                normalized.push(component.as_os_str());
-            }
-            Component::Prefix(prefix) => {
-                normalized.push(prefix.as_os_str());
-            }
-        }
-    }
-    normalized
 }
 
 #[cfg(test)]

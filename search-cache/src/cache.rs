@@ -241,6 +241,36 @@ impl SearchCache {
         self.node_index_for_relative_path(relative)
     }
 
+    /// Get all subnode indices of a given node index(including itself).
+    pub fn all_subnodes(
+        &self,
+        index: SlabIndex,
+        cancel: CancellationToken,
+    ) -> Option<Vec<SlabIndex>> {
+        let mut result = Vec::new();
+        let mut i = 0;
+        self.all_subnodes_recursive(index, &mut result, &mut i, cancel)?;
+        Some(result)
+    }
+
+    fn all_subnodes_recursive(
+        &self,
+        index: SlabIndex,
+        out: &mut Vec<SlabIndex>,
+        i: &mut usize,
+        cancel: CancellationToken,
+    ) -> Option<()> {
+        for &child in &self.file_nodes[index].children {
+            if *i % 0x10000 == 0 && cancel.is_cancelled() {
+                return None;
+            }
+            *i += 1;
+            out.push(child);
+            self.all_subnodes_recursive(child, out, i, cancel)?;
+        }
+        Some(())
+    }
+
     fn push_node(&mut self, node: SlabNode) -> SlabIndex {
         let node_name = node.name_and_parent;
         let index = self.file_nodes.insert(node);
