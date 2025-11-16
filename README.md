@@ -23,15 +23,15 @@ Need a different language? Click the 🌍 button in the status bar to switch ins
 
 ### Search basics
 
-Cardinal's search box understands several pattern styles to help you locate files fast:
+Cardinal now speaks an Everything-compatible syntax layer on top of the classic substring/prefix tricks:
 
-- `substr` – return files whose names contain `substr` as a contiguous fragment.
-- `/prefix` – keep files whose names start with `prefix`.
-- `suffix/` – match files whose names end with `suffix`.
-- `/exact/` – only list files that exactly match `exact`.
-- `a/part/of/path` – search for substrings anywhere in the path, letting you mix directory and filename segments.
+- `report draft` – space acts as `AND`, so you only see files whose names contain both tokens.
+- `*.pdf briefing` – filter to PDF results whose names include “briefing”.
+- `infolder:/Users demo!.psd` – restrict the search root to `/Users`, then search for files whose names contain `demo` but exclude `.psd`.
+- `"Application Support"` – quote exact phrases.
+- `brary/Applicat` – use `/` as a path separator for sub-path searching, matching directories like `Library/Application Support`.
 
-Both **case-sensitive** and **regular-expression** modes are available via the toggles next to the search input, so you can tighten queries whenever needed.
+For the supported operator catalog—including boolean grouping, folder scoping, extension filters, regex usage, and more examples—see [`doc/search-syntax.md`](doc/search-syntax.md).
 
 ### Keyboard shortcuts & previews
 
