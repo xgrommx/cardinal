@@ -4,7 +4,9 @@ import { splitTextWithHighlights } from './MiddleEllipsisHighlight';
 
 describe('splitTextWithHighlights', () => {
   it('returns entire string as plain text when no needles are provided', () => {
-    expect(splitTextWithHighlights('foo', undefined)).toEqual([{ text: 'foo', isHighlight: false }]);
+    expect(splitTextWithHighlights('foo', undefined)).toEqual([
+      { text: 'foo', isHighlight: false },
+    ]);
     expect(splitTextWithHighlights('foo', [])).toEqual([{ text: 'foo', isHighlight: false }]);
   });
 
@@ -24,16 +26,14 @@ describe('splitTextWithHighlights', () => {
   });
 
   it('respects case sensitivity flags', () => {
-    expect(
-      splitTextWithHighlights('AlphaBeta', ['alpha'], { caseInsensitive: true }),
-    ).toEqual([
+    expect(splitTextWithHighlights('AlphaBeta', ['alpha'], { caseInsensitive: true })).toEqual([
       { text: 'Alpha', isHighlight: true },
       { text: 'Beta', isHighlight: false },
     ]);
 
-    expect(
-      splitTextWithHighlights('AlphaBeta', ['alpha'], { caseInsensitive: false }),
-    ).toEqual([{ text: 'AlphaBeta', isHighlight: false }]);
+    expect(splitTextWithHighlights('AlphaBeta', ['alpha'], { caseInsensitive: false })).toEqual([
+      { text: 'AlphaBeta', isHighlight: false },
+    ]);
   });
 
   it('handles multiple non-overlapping matches', () => {
