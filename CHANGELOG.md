@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8 — 2025-11-16
+- Cardinal now fully supports the "Everything syntax"(AND/OR/NOT, parentheses, quoted phrases, wildcards).
+- Removed the legacy regex toggle and unified the search bar, hooks, and IPC payloads around the new parser pipeline.
+- Highlight of search results was improved.
+- Enhance show/hide shortcut.
+
 ## 0.1.7 — 2025-11-12
 - Added a cancellable search pipeline for a more responsive search experience.
 - Refined selected row styling with dedicated text color tokens for better contrast in both themes.
