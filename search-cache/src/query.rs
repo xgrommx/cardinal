@@ -38,15 +38,14 @@ impl SearchCache {
         options: SearchOptions,
         token: CancellationToken,
     ) -> Result<Option<Vec<SlabIndex>>> {
-        if parts.is_empty() {
-            return Ok(Some(Vec::new()));
-        }
         let mut current: Option<Vec<SlabIndex>> = None;
         for part in parts {
             match part {
-                Expr::Empty => {}
                 Expr::Not(inner) => {
-                    current = self.evaluate_not(inner, current, options, token)?;
+                    let Some(x) = self.evaluate_not(inner, current, options, token)? else {
+                        return Ok(None);
+                    };
+                    current = Some(x);
                 }
                 _ => {
                     let Some(nodes) = self.evaluate_expr(part, options, token)? else {
@@ -64,7 +63,7 @@ impl SearchCache {
                 }
             }
         }
-        Ok(Some(current.unwrap_or_default()))
+        Ok(Some(current.expect("at least one part in AND expression")))
     }
 
     fn evaluate_or(
@@ -73,9 +72,6 @@ impl SearchCache {
         options: SearchOptions,
         token: CancellationToken,
     ) -> Result<Option<Vec<SlabIndex>>> {
-        if parts.is_empty() {
-            return Ok(Some(Vec::new()));
-        }
         let mut result: Vec<SlabIndex> = Vec::new();
         for part in parts {
             let candidate = self.evaluate_expr(part, options, token)?;
