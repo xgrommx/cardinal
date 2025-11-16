@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.9 — 2025-11-17
+- Speedup `parent:` and `infolder:` filters.
+
 ## 0.1.8 — 2025-11-16
 - Cardinal now fully supports the "Everything syntax"(AND/OR/NOT, parentheses, quoted phrases, wildcards).
 - Removed the legacy regex toggle and unified the search bar, hooks, and IPC payloads around the new parser pipeline.
