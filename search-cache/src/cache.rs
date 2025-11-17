@@ -188,13 +188,13 @@ impl SearchCache {
     }
 
     #[cfg(test)]
-    pub fn search(&self, line: &str) -> Result<Vec<SlabIndex>> {
+    pub fn search(&mut self, line: &str) -> Result<Vec<SlabIndex>> {
         self.search_with_options(line, SearchOptions::default(), CancellationToken::noop())
             .map(|outcome| outcome.nodes.unwrap_or_default())
     }
 
     pub fn search_with_options(
-        &self,
+        &mut self,
         line: &str,
         options: SearchOptions,
         cancellation_token: CancellationToken,
@@ -983,7 +983,7 @@ mod tests {
         fs::File::create(dir.join("foo.txt")).unwrap();
         fs::File::create(dir.join("bar.txt")).unwrap();
 
-        let cache = SearchCache::walk_fs(dir.to_path_buf());
+        let mut cache = SearchCache::walk_fs(dir.to_path_buf());
         let token = CancellationToken::new(10);
         let _ = CancellationToken::new(11); // cancel previous token
 
@@ -1071,7 +1071,7 @@ mod tests {
     fn test_search_with_options_cancelled_returns_none() {
         let temp_dir = TempDir::new("search_with_options_cancelled").unwrap();
         fs::File::create(temp_dir.path().join("file_a.txt")).unwrap();
-        let cache = SearchCache::walk_fs(temp_dir.path().to_path_buf());
+        let mut cache = SearchCache::walk_fs(temp_dir.path().to_path_buf());
 
         let token = CancellationToken::new(2000);
         let _ = CancellationToken::new(2001);
@@ -1395,7 +1395,7 @@ mod tests {
         fs::create_dir(root_path.join("subdir1")).expect("Failed to create subdir1");
         fs::File::create(root_path.join("subdir1/file2.txt")).expect("Failed to create file1.txt");
 
-        let cache = SearchCache::walk_fs(root_path.to_path_buf());
+        let mut cache = SearchCache::walk_fs(root_path.to_path_buf());
 
         // Directory nodes should always carry metadata.
         assert!(cache.file_nodes[cache.file_nodes.root()].metadata.is_some());

@@ -1,9 +1,11 @@
 use crate::{
-    SearchCache, SearchOptions, SegmentKind, SegmentMatcher, SlabIndex, build_segment_matchers,
-    cache::NAME_POOL,
+    SearchCache, SearchOptions, SegmentKind, SegmentMatcher, SlabIndex, SlabNodeMetadataCompact,
+    build_segment_matchers, cache::NAME_POOL,
 };
 use anyhow::{Result, anyhow, bail};
-use cardinal_syntax::{ArgumentKind, Expr, Filter, FilterArgument, FilterKind, Term};
+use cardinal_syntax::{
+    ArgumentKind, ComparisonOp, Expr, Filter, FilterArgument, FilterKind, RangeSeparator, Term,
+};
 use fswalk::NodeFileType;
 use hashbrown::HashSet;
 use query_segmentation::query_segmentation;
@@ -13,7 +15,7 @@ use std::{collections::BTreeSet, path::PathBuf};
 
 impl SearchCache {
     pub(crate) fn evaluate_expr(
-        &self,
+        &mut self,
         expr: &Expr,
         options: SearchOptions,
         token: CancellationToken,
@@ -28,7 +30,7 @@ impl SearchCache {
     }
 
     fn evaluate_and(
-        &self,
+        &mut self,
         parts: &[Expr],
         options: SearchOptions,
         token: CancellationToken,
@@ -62,7 +64,7 @@ impl SearchCache {
     }
 
     fn evaluate_or(
-        &self,
+        &mut self,
         parts: &[Expr],
         options: SearchOptions,
         token: CancellationToken,
@@ -81,7 +83,7 @@ impl SearchCache {
     }
 
     fn evaluate_not(
-        &self,
+        &mut self,
         inner: &Expr,
         base: Option<Vec<SlabIndex>>,
         options: SearchOptions,
@@ -106,7 +108,7 @@ impl SearchCache {
     }
 
     fn evaluate_term(
-        &self,
+        &mut self,
         term: &Term,
         options: SearchOptions,
         token: CancellationToken,
@@ -224,7 +226,7 @@ impl SearchCache {
     }
 
     fn evaluate_filter(
-        &self,
+        &mut self,
         filter: &Filter,
         options: SearchOptions,
         token: CancellationToken,
@@ -262,6 +264,32 @@ impl SearchCache {
                     .as_ref()
                     .ok_or_else(|| anyhow!("infolder: requires a folder path"))?;
                 self.evaluate_infolder_filter(argument, token)
+            }
+            FilterKind::Type => {
+                let argument = filter
+                    .argument
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("type: requires a category"))?;
+                self.evaluate_named_type_filter(&argument.raw, options, token)
+            }
+            FilterKind::Audio => {
+                self.evaluate_type_macro("audio", filter.argument.as_ref(), options, token)
+            }
+            FilterKind::Video => {
+                self.evaluate_type_macro("video", filter.argument.as_ref(), options, token)
+            }
+            FilterKind::Doc => {
+                self.evaluate_type_macro("doc", filter.argument.as_ref(), options, token)
+            }
+            FilterKind::Exe => {
+                self.evaluate_type_macro("exe", filter.argument.as_ref(), options, token)
+            }
+            FilterKind::Size => {
+                let argument = filter
+                    .argument
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("size: requires a value"))?;
+                self.evaluate_size_filter(argument, token)
             }
             _ => bail!("Filter {:?} is not supported yet", filter.kind),
         }
@@ -340,6 +368,109 @@ impl SearchCache {
         Ok(self.all_subnodes(target, token))
     }
 
+    fn evaluate_named_type_filter(
+        &self,
+        raw: &str,
+        options: SearchOptions,
+        token: CancellationToken,
+    ) -> Result<Option<Vec<SlabIndex>>> {
+        let name = raw.trim();
+        if name.is_empty() {
+            bail!("type: requires a category");
+        }
+        let normalized = name.to_ascii_lowercase();
+        let Some(target) = lookup_type_group(&normalized) else {
+            bail!("Unknown type category: {name}");
+        };
+        self.apply_type_group(target, options, token)
+    }
+
+    fn evaluate_type_macro(
+        &self,
+        name: &'static str,
+        argument: Option<&FilterArgument>,
+        options: SearchOptions,
+        token: CancellationToken,
+    ) -> Result<Option<Vec<SlabIndex>>> {
+        let base = self.apply_type_group(
+            lookup_type_group(name).expect("built-in macro should map to a known type group"),
+            options,
+            token,
+        )?;
+        let Some(mut nodes) = base else {
+            return Ok(None);
+        };
+        let Some(argument) = argument else {
+            return Ok(Some(nodes));
+        };
+        let Some(matches) = self.evaluate_phrase(&argument.raw, options, token)? else {
+            return Ok(None);
+        };
+        if intersect_in_place(&mut nodes, &matches, token).is_none() {
+            return Ok(None);
+        }
+        Ok(Some(nodes))
+    }
+
+    fn apply_type_group(
+        &self,
+        target: TypeFilterTarget,
+        options: SearchOptions,
+        token: CancellationToken,
+    ) -> Result<Option<Vec<SlabIndex>>> {
+        match target {
+            TypeFilterTarget::NodeType(file_type) => {
+                self.evaluate_type_filter(file_type, None, options, token)
+            }
+            TypeFilterTarget::Extensions(list) => self.filter_static_extensions(list, token),
+        }
+    }
+
+    fn filter_static_extensions(
+        &self,
+        extensions: &'static [&'static str],
+        token: CancellationToken,
+    ) -> Result<Option<Vec<SlabIndex>>> {
+        if extensions.is_empty() {
+            return Ok(Some(Vec::new()));
+        }
+        let Some(nodes) = self.search_empty(token) else {
+            return Ok(None);
+        };
+        Ok(filter_nodes(nodes, token, |index| {
+            let node = &self.file_nodes[index];
+            if node.metadata.file_type_hint() != NodeFileType::File {
+                return false;
+            }
+            if let Some(ext) = extension_of(node.name_and_parent.as_str()) {
+                extensions.iter().any(|needle| *needle == ext)
+            } else {
+                false
+            }
+        }))
+    }
+
+    fn evaluate_size_filter(
+        &mut self,
+        argument: &FilterArgument,
+        token: CancellationToken,
+    ) -> Result<Option<Vec<SlabIndex>>> {
+        let predicate = SizePredicate::parse(argument)?;
+        let Some(nodes) = self.search_empty(token) else {
+            return Ok(None);
+        };
+        Ok(filter_nodes(nodes, token, |index| {
+            let node = &self.file_nodes[index];
+            if node.metadata.file_type_hint() != NodeFileType::File {
+                return false;
+            }
+            let Some(size) = self.node_size_bytes(index) else {
+                return false;
+            };
+            predicate.matches(size)
+        }))
+    }
+
     fn resolve_query_path(&self, raw: &str) -> Result<PathBuf> {
         let raw = PathBuf::from(raw);
         if !raw.starts_with(self.file_nodes.path()) {
@@ -350,6 +481,22 @@ impl SearchCache {
             );
         }
         Ok(raw)
+    }
+
+    fn node_size_bytes(&mut self, index: SlabIndex) -> Option<u64> {
+        if let Some(meta) = self.file_nodes[index].metadata.as_ref() {
+            return Some(meta.size());
+        }
+        let path = self
+            .node_path(index)
+            .expect("node index is not present in slab");
+        let compact = if let Ok(metadata) = std::fs::symlink_metadata(&path) {
+            SlabNodeMetadataCompact::some(metadata.into())
+        } else {
+            SlabNodeMetadataCompact::unaccessible()
+        };
+        self.file_nodes[index].metadata = compact;
+        compact.size_hint()
     }
 }
 
@@ -387,6 +534,268 @@ fn extension_of(name: &str) -> Option<String> {
         return None;
     }
     Some(name[pos + 1..].to_ascii_lowercase())
+}
+
+#[derive(Clone, Copy)]
+enum TypeFilterTarget {
+    NodeType(NodeFileType),
+    Extensions(&'static [&'static str]),
+}
+
+fn lookup_type_group(name: &str) -> Option<TypeFilterTarget> {
+    match name {
+        "file" | "files" => Some(TypeFilterTarget::NodeType(NodeFileType::File)),
+        "folder" | "folders" | "dir" | "directory" => {
+            Some(TypeFilterTarget::NodeType(NodeFileType::Dir))
+        }
+        "picture" | "pictures" | "image" | "images" | "photo" | "photos" => {
+            Some(TypeFilterTarget::Extensions(PICTURE_EXTENSIONS))
+        }
+        "video" | "videos" | "movie" | "movies" => {
+            Some(TypeFilterTarget::Extensions(VIDEO_EXTENSIONS))
+        }
+        "audio" | "audios" | "music" | "song" | "songs" => {
+            Some(TypeFilterTarget::Extensions(AUDIO_EXTENSIONS))
+        }
+        "doc" | "docs" | "document" | "documents" | "text" | "office" => {
+            Some(TypeFilterTarget::Extensions(DOCUMENT_EXTENSIONS))
+        }
+        "presentation" | "presentations" | "ppt" | "slides" => {
+            Some(TypeFilterTarget::Extensions(PRESENTATION_EXTENSIONS))
+        }
+        "spreadsheet" | "spreadsheets" | "xls" | "excel" | "sheet" | "sheets" => {
+            Some(TypeFilterTarget::Extensions(SPREADSHEET_EXTENSIONS))
+        }
+        "pdf" => Some(TypeFilterTarget::Extensions(PDF_EXTENSIONS)),
+        "archive" | "archives" | "compressed" | "zip" => {
+            Some(TypeFilterTarget::Extensions(ARCHIVE_EXTENSIONS))
+        }
+        "code" | "source" | "dev" => Some(TypeFilterTarget::Extensions(CODE_EXTENSIONS)),
+        "exe" | "exec" | "executable" | "executables" | "program" | "programs" | "app" | "apps" => {
+            Some(TypeFilterTarget::Extensions(EXECUTABLE_EXTENSIONS))
+        }
+        _ => None,
+    }
+}
+
+const PICTURE_EXTENSIONS: &[&str] = &[
+    "jpg", "jpeg", "png", "gif", "bmp", "tif", "tiff", "webp", "ico", "svg", "heic", "heif", "raw",
+    "arw", "cr2", "orf", "raf", "psd", "ai",
+];
+const VIDEO_EXTENSIONS: &[&str] = &[
+    "mp4", "m4v", "mov", "avi", "mkv", "wmv", "webm", "flv", "mpg", "mpeg", "3gp", "3g2", "ts",
+    "mts", "m2ts",
+];
+const AUDIO_EXTENSIONS: &[&str] = &[
+    "mp3", "wav", "flac", "aac", "ogg", "oga", "opus", "wma", "m4a", "alac", "aiff",
+];
+const DOCUMENT_EXTENSIONS: &[&str] = &[
+    "txt", "md", "rst", "doc", "docx", "rtf", "odt", "pdf", "pages", "rtfd",
+];
+const PRESENTATION_EXTENSIONS: &[&str] = &["ppt", "pptx", "key", "odp"];
+const SPREADSHEET_EXTENSIONS: &[&str] = &["xls", "xlsx", "csv", "numbers", "ods"];
+const PDF_EXTENSIONS: &[&str] = &["pdf"];
+const ARCHIVE_EXTENSIONS: &[&str] = &[
+    "zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "zst", "cab", "iso", "dmg",
+];
+const CODE_EXTENSIONS: &[&str] = &[
+    "rs", "ts", "tsx", "js", "jsx", "c", "cc", "cpp", "cxx", "h", "hpp", "hh", "java", "cs", "py",
+    "go", "rb", "swift", "kt", "kts", "php", "html", "css", "scss", "sass", "less", "json", "yaml",
+    "yml", "toml", "ini", "cfg", "sh", "zsh", "fish", "ps1", "psm1", "sql", "lua", "pl", "pm", "r",
+    "m", "mm", "dart", "scala", "ex", "exs",
+];
+const EXECUTABLE_EXTENSIONS: &[&str] = &[
+    "exe", "msi", "bat", "cmd", "com", "ps1", "psm1", "app", "apk", "ipa", "jar", "bin", "run",
+    "pkg",
+];
+
+struct SizePredicate {
+    kind: SizePredicateKind,
+}
+
+enum SizePredicateKind {
+    Comparison { op: ComparisonOp, value: u64 },
+    Range { min: Option<u64>, max: Option<u64> },
+}
+
+impl SizePredicate {
+    fn parse(argument: &FilterArgument) -> Result<Self> {
+        match &argument.kind {
+            ArgumentKind::Comparison(comp) => {
+                if size_keyword(&comp.value).is_some() {
+                    bail!("size keywords cannot be used with comparison operators");
+                }
+                let value = parse_size_literal(&comp.value)?;
+                Ok(SizePredicate {
+                    kind: SizePredicateKind::Comparison { op: comp.op, value },
+                })
+            }
+            ArgumentKind::Range(range) => {
+                if range.separator != RangeSeparator::Dots {
+                    bail!("size: only .. ranges are supported");
+                }
+                let start = match &range.start {
+                    Some(value) => Some(parse_size_literal(value)?),
+                    None => None,
+                };
+                let end = match &range.end {
+                    Some(value) => Some(parse_size_literal(value)?),
+                    None => None,
+                };
+                if let (Some(s), Some(e)) = (start, end) {
+                    if s > e {
+                        bail!("size range start must be less than or equal to the end");
+                    }
+                }
+                Ok(SizePredicate {
+                    kind: SizePredicateKind::Range {
+                        min: start,
+                        max: end,
+                    },
+                })
+            }
+            ArgumentKind::List(_) => bail!("size: lists are not supported"),
+            _ => SizePredicate::from_bare_value(&argument.raw),
+        }
+    }
+
+    fn from_bare_value(raw: &str) -> Result<Self> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            bail!("size: requires a value");
+        }
+        if let Some(range) = size_keyword(trimmed) {
+            return Ok(SizePredicate {
+                kind: SizePredicateKind::Range {
+                    min: range.min,
+                    max: range.max,
+                },
+            });
+        }
+        let value = parse_size_literal(trimmed)?;
+        Ok(SizePredicate {
+            kind: SizePredicateKind::Comparison {
+                op: ComparisonOp::Eq,
+                value,
+            },
+        })
+    }
+
+    fn matches(&self, size: u64) -> bool {
+        match &self.kind {
+            SizePredicateKind::Comparison { op, value } => match op {
+                ComparisonOp::Lt => size < *value,
+                ComparisonOp::Lte => size <= *value,
+                ComparisonOp::Gt => size > *value,
+                ComparisonOp::Gte => size >= *value,
+                ComparisonOp::Eq => size == *value,
+                ComparisonOp::Ne => size != *value,
+            },
+            SizePredicateKind::Range { min, max } => {
+                if let Some(start) = min {
+                    if size < *start {
+                        return false;
+                    }
+                }
+                if let Some(end) = max {
+                    if size > *end {
+                        return false;
+                    }
+                }
+                true
+            }
+        }
+    }
+}
+
+struct SizeKeywordRange {
+    min: Option<u64>,
+    max: Option<u64>,
+}
+
+fn size_keyword(name: &str) -> Option<SizeKeywordRange> {
+    let normalized = name.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "empty" => Some(SizeKeywordRange {
+            min: Some(0),
+            max: Some(0),
+        }),
+        "tiny" => Some(SizeKeywordRange {
+            min: Some(0),
+            max: Some(10 * KB),
+        }),
+        "small" => Some(SizeKeywordRange {
+            min: Some(10 * KB + 1),
+            max: Some(100 * KB),
+        }),
+        "medium" => Some(SizeKeywordRange {
+            min: Some(100 * KB + 1),
+            max: Some(MB),
+        }),
+        "large" => Some(SizeKeywordRange {
+            min: Some(MB + 1),
+            max: Some(16 * MB),
+        }),
+        "huge" => Some(SizeKeywordRange {
+            min: Some(16 * MB + 1),
+            max: Some(128 * MB),
+        }),
+        "gigantic" | "giant" => Some(SizeKeywordRange {
+            min: Some(128 * MB + 1),
+            max: None,
+        }),
+        _ => None,
+    }
+}
+
+const KB: u64 = 1024;
+const MB: u64 = 1024 * 1024;
+
+fn parse_size_literal(raw: &str) -> Result<u64> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        bail!("size: expected a number");
+    }
+    let mut split = trimmed.len();
+    for (idx, ch) in trimmed.char_indices() {
+        if ch.is_ascii_digit() || ch == '.' {
+            continue;
+        }
+        split = idx;
+        break;
+    }
+
+    let (value_part, unit_part) = trimmed.split_at(split);
+    if value_part.is_empty() {
+        bail!("size: expected a numeric value in {raw:?}");
+    }
+    let value: f64 = value_part
+        .parse()
+        .map_err(|_| anyhow!("size: failed to parse number in {raw:?}"))?;
+    let multiplier = size_unit_multiplier(unit_part)?;
+    let bytes = (value * multiplier as f64).round();
+    if !bytes.is_finite() || bytes < 0.0 {
+        bail!("size: value {raw:?} is out of range");
+    }
+    if bytes > u64::MAX as f64 {
+        Ok(u64::MAX)
+    } else {
+        Ok(bytes as u64)
+    }
+}
+
+fn size_unit_multiplier(unit: &str) -> Result<u64> {
+    let normalized = unit.trim().to_ascii_lowercase();
+    let multiplier = match normalized.as_str() {
+        "" | "b" | "byte" | "bytes" => 1,
+        "k" | "kb" | "kib" | "kilobyte" | "kilobytes" => 1024,
+        "m" | "mb" | "mib" | "megabyte" | "megabytes" => 1024 * 1024,
+        "g" | "gb" | "gib" | "gigabyte" | "gigabytes" => 1024 * 1024 * 1024,
+        "t" | "tb" | "tib" | "terabyte" | "terabytes" => 1024_u64.pow(4),
+        "p" | "pb" | "pib" | "petabyte" | "petabytes" => 1024_u64.pow(5),
+        _ => bail!("Unknown size unit: {unit:?}"),
+    };
+    Ok(multiplier)
 }
 
 fn wildcard_to_regex(pattern: &str) -> String {

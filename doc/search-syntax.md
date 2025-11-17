@@ -40,9 +40,12 @@ NOT > OR > AND, so group expressions (e.g., `good (*.mp3|*.wav)`) any time you w
 | `ext:`              | Accept a semicolon-separated extension list: `ext:jpg;png;gif`.                            |
 | `parent:`           | Show only direct children of a directory: `parent:/Users/demo/Documents`.                  |
 | `infolder:`         | Walk a directory recursively: `infolder:/Users/demo/Projects report`.                      |
+| `type:`             | Category filters such as `type:picture`, `type:video`, `type:doc`, `type:archive`, etc.    |
+| `audio:` / `video:` / `doc:` / `exe:` | Shorthand macros equivalent to `type:audio`, `type:video`, etc.          |
+| `size:`             | Filter by file size with comparisons (`size:>1GB`), ranges (`size:1mb..10mb`), or keywords (`size:tiny`). |
 | `regex:`            | Regular expressions (`regex:^README\..*`).                                                 |
 
-More Everything filters (e.g., `type:`, `size:`, `dm:`) already parse but are not executed by the current search engine, so they are intentionally omitted here until runtime support lands.
+Date-based filters (e.g., `dm:`, `dc:`) already parse but are not executed by the current search engine, so they are intentionally omitted here until runtime support lands.
 
 ## Additional Notes
 

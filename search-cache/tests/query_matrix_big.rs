@@ -160,7 +160,7 @@ fn wildcard_vs_phrase_behavior_matrix() {
 
 #[test]
 fn case_insensitive_option_matrix() {
-    let cache = build_cache();
+    let mut cache = build_cache();
     let opts = SearchOptions {
         case_insensitive: true,
     };
@@ -184,7 +184,7 @@ fn case_insensitive_option_matrix() {
 
 #[test]
 fn cancellation_large_iteration() {
-    let cache = build_cache();
+    let mut cache = build_cache();
     let token = CancellationToken::new(9999);
     let _later = CancellationToken::new(10000); // cancel token
     let result = cache
