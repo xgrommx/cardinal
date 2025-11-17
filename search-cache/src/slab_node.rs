@@ -1,3 +1,4 @@
+use crate::{NAME_POOL, OptionSlabIndex, SlabIndex, State, StateTypeSize};
 use fswalk::NodeFileType;
 use serde::{
     Deserialize, Serialize,
@@ -13,7 +14,7 @@ pub struct NameAndParent {
     // Length of the filename should not be larger than 256 chars(macOS, Linux,
     // Window, BSD) should be enough.
     len: u32,
-    parent: crate::OptionSlabIndex,
+    parent: OptionSlabIndex,
 }
 
 unsafe impl Send for NameAndParent {}
@@ -51,11 +52,11 @@ impl<'de> serde::de::Deserialize<'de> for NameAndParent {
                 let name: String = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let parent: crate::OptionSlabIndex = seq
+                let parent: OptionSlabIndex = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
 
-                let name_in_pool = crate::NAME_POOL.push(&name);
+                let name_in_pool = NAME_POOL.push(&name);
 
                 Ok(NameAndParent::new(name_in_pool, parent))
             }
@@ -74,7 +75,7 @@ impl std::ops::Deref for NameAndParent {
 }
 
 impl NameAndParent {
-    pub fn new(s: &'static str, parent: crate::OptionSlabIndex) -> Self {
+    pub fn new(s: &'static str, parent: OptionSlabIndex) -> Self {
         Self {
             ptr: s.as_ptr(),
             len: s
@@ -89,7 +90,7 @@ impl NameAndParent {
         unsafe { std::str::from_raw_parts(self.ptr, self.len as usize) }
     }
 
-    pub fn parent(&self) -> Option<crate::SlabIndex> {
+    pub fn parent(&self) -> Option<SlabIndex> {
         self.parent.to_option()
     }
 }
@@ -97,24 +98,24 @@ impl NameAndParent {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SlabNode {
     pub name_and_parent: NameAndParent,
-    pub children: ThinVec<crate::SlabIndex>,
+    pub children: ThinVec<SlabIndex>,
     pub metadata: SlabNodeMetadataCompact,
 }
 
 impl SlabNode {
-    pub fn add_children(&mut self, children: crate::SlabIndex) {
+    pub fn add_children(&mut self, children: SlabIndex) {
         if !self.children.contains(&children) {
             self.children.push(children);
         }
     }
 
     pub fn new(
-        parent: Option<crate::SlabIndex>,
+        parent: Option<SlabIndex>,
         name: &'static str,
         metadata: SlabNodeMetadataCompact,
     ) -> Self {
         Self {
-            name_and_parent: NameAndParent::new(name, crate::OptionSlabIndex::from_option(parent)),
+            name_and_parent: NameAndParent::new(name, OptionSlabIndex::from_option(parent)),
             children: ThinVec::new(),
             metadata,
         }
@@ -145,7 +146,7 @@ impl<'a> SlabNodeMetadata<'a> {
 /// Use a compact form so that
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct SlabNodeMetadataCompact {
-    state_type_and_size: crate::StateTypeSize,
+    state_type_and_size: StateTypeSize,
     // Actually a Option<NonZeroU32>, but using u32 here due to https://github.com/serde-rs/serde/issues/1834
     ctime: u32,
     mtime: u32,
@@ -154,7 +155,7 @@ pub struct SlabNodeMetadataCompact {
 impl SlabNodeMetadataCompact {
     pub fn unaccessible() -> Self {
         Self {
-            state_type_and_size: crate::StateTypeSize::unaccessible(),
+            state_type_and_size: StateTypeSize::unaccessible(),
             ctime: 0,
             mtime: 0,
         }
@@ -169,7 +170,7 @@ impl SlabNodeMetadataCompact {
         }: fswalk::NodeMetadata,
     ) -> Self {
         Self {
-            state_type_and_size: crate::StateTypeSize::some(r#type, size),
+            state_type_and_size: StateTypeSize::some(r#type, size),
             ctime: ctime
                 .and_then(|x| std::num::NonZeroU32::try_from(x).ok())
                 .map(|x| x.get())
@@ -183,33 +184,33 @@ impl SlabNodeMetadataCompact {
 
     pub fn none() -> Self {
         Self {
-            state_type_and_size: crate::StateTypeSize::none(),
+            state_type_and_size: StateTypeSize::none(),
             ctime: 0,
             mtime: 0,
         }
     }
 
-    pub fn state(&self) -> crate::State {
+    pub fn state(&self) -> State {
         self.state_type_and_size.state()
     }
 
     pub fn as_ref(&self) -> Option<SlabNodeMetadata<'_>> {
         match self.state() {
-            crate::State::Some => Some(SlabNodeMetadata(self)),
-            crate::State::Unaccessible | crate::State::None => None,
+            State::Some => Some(SlabNodeMetadata(self)),
+            State::Unaccessible | State::None => None,
         }
     }
 
     pub fn is_some(&self) -> bool {
-        matches!(self.state(), crate::State::Some)
+        matches!(self.state(), State::Some)
     }
 
     pub fn is_none(&self) -> bool {
-        matches!(self.state(), crate::State::None)
+        matches!(self.state(), State::None)
     }
 
     pub fn is_unaccessible(&self) -> bool {
-        matches!(self.state(), crate::State::Unaccessible)
+        matches!(self.state(), State::Unaccessible)
     }
 
     pub fn file_type_hint(&self) -> NodeFileType {
@@ -217,7 +218,7 @@ impl SlabNodeMetadataCompact {
     }
 
     pub fn size_hint(&self) -> Option<u64> {
-        (self.state() == crate::State::Some).then(|| self.state_type_and_size.size())
+        (self.state() == State::Some).then(|| self.state_type_and_size.size())
     }
 }
 
