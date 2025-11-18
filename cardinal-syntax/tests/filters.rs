@@ -66,3 +66,14 @@ fn filter_can_appear_anywhere_in_and_chain() {
     filter_arg_is_comparison(&parts[1], ComparisonOp::Gt, "1gb");
     word_is(&parts[2], "report");
 }
+
+#[test]
+fn dm_and_dc_filters_are_moved_to_the_end_of_and_chain() {
+    let expr = parse_ok("folder:projects dm:today report dc:thisweek");
+    let parts = as_and(&expr);
+    filter_is_kind(&parts[0], &FilterKind::Folder);
+    filter_arg_raw(&parts[0], "projects");
+    word_is(&parts[1], "report");
+    filter_is_kind(&parts[2], &FilterKind::DateModified);
+    filter_is_kind(&parts[3], &FilterKind::DateCreated);
+}

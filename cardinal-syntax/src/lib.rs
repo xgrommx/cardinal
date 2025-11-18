@@ -21,7 +21,7 @@ use std::fmt;
 
 /// Parses an Everything-like query string into a structured expression tree.
 pub fn parse_query(input: &str) -> Result<Query, ParseError> {
-    Parser::new(input).parse()
+    Parser::new(input).parse().map(optimize_query)
 }
 
 /// User input normalized into a single expression tree.
@@ -34,6 +34,57 @@ impl Query {
     pub fn is_empty(&self) -> bool {
         matches!(self.expr, Expr::Empty)
     }
+}
+
+fn optimize_query(mut query: Query) -> Query {
+    query.expr = optimize_expr(query.expr);
+    query
+}
+
+fn optimize_expr(expr: Expr) -> Expr {
+    match expr {
+        Expr::And(parts) => {
+            let mut parts: Vec<Expr> = parts.into_iter().map(optimize_expr).collect();
+            reorder_metadata_filters(&mut parts);
+            Expr::And(parts)
+        }
+        Expr::Or(parts) => Expr::Or(parts.into_iter().map(optimize_expr).collect()),
+        Expr::Not(inner) => Expr::Not(Box::new(optimize_expr(*inner))),
+        Expr::Term(_) | Expr::Empty => expr,
+    }
+}
+
+fn reorder_metadata_filters(parts: &mut Vec<Expr>) {
+    if parts.len() <= 1 || !parts.iter().any(is_metadata_filter) {
+        return;
+    }
+
+    let mut reordered = Vec::with_capacity(parts.len());
+    let mut metadata = Vec::new();
+
+    for expr in parts.drain(..) {
+        if is_metadata_filter(&expr) {
+            metadata.push(expr);
+        } else {
+            reordered.push(expr);
+        }
+    }
+
+    parts.extend(reordered);
+    parts.extend(metadata);
+}
+
+fn is_metadata_filter(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Term(Term::Filter(Filter {
+            kind: FilterKind::DateModified,
+            ..
+        })) | Expr::Term(Term::Filter(Filter {
+            kind: FilterKind::DateCreated,
+            ..
+        }))
+    )
 }
 
 /// Logical structure for Everything queries.
