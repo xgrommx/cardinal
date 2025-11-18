@@ -58,17 +58,22 @@ fn not_prefix_chains_of_various_lengths() {
 #[test]
 fn or_sequences_with_varied_spacing() {
     let cases = [
-        ("a|b|c", 3),
-        ("a |b | c", 3),
-        (" a| b |c ", 3),
-        ("|a|b|", 4),
-        ("||", 3),
+        ("a|b|c", Some(3)),
+        ("a |b | c", Some(3)),
+        (" a| b |c ", Some(3)),
+        ("|a|b|", None),
+        ("||", None),
     ];
 
-    for (q, count) in cases {
+    for (q, expected_len) in cases {
         let expr = parse_ok(q);
-        let parts = as_or(&expr);
-        assert_eq!(parts.len(), count);
+        match expected_len {
+            Some(count) => {
+                let parts = as_or(&expr);
+                assert_eq!(parts.len(), count);
+            }
+            None => assert!(is_empty(&expr)),
+        }
     }
 }
 

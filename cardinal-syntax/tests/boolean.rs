@@ -27,40 +27,27 @@ fn or_has_higher_precedence_than_and() {
 }
 
 #[test]
-fn consecutive_or_creates_empty_operands() {
+fn consecutive_or_with_empty_operand_collapses_to_empty_expr() {
     let expr = parse_ok("foo||bar");
-    let parts = as_or(&expr);
-    assert_eq!(parts.len(), 3);
-    word_is(&parts[0], "foo");
-    assert!(is_empty(&parts[1]));
-    word_is(&parts[2], "bar");
+    assert!(is_empty(&expr));
 }
 
 #[test]
-fn leading_or_creates_empty_first_operand() {
+fn leading_or_collapses_to_empty_expr() {
     let expr = parse_ok("| foo");
-    let parts = as_or(&expr);
-    assert_eq!(parts.len(), 2);
-    assert!(is_empty(&parts[0]));
-    word_is(&parts[1], "foo");
+    assert!(is_empty(&expr));
 }
 
 #[test]
-fn trailing_or_creates_empty_last_operand() {
+fn trailing_or_collapses_to_empty_expr() {
     let expr = parse_ok("foo |");
-    let parts = as_or(&expr);
-    assert_eq!(parts.len(), 2);
-    word_is(&parts[0], "foo");
-    assert!(is_empty(&parts[1]));
+    assert!(is_empty(&expr));
 }
 
 #[test]
-fn or_with_empty_phrase_creates_empty_operand() {
+fn or_with_empty_phrase_collapses_to_empty_expr() {
     let expr = parse_ok("a|\"\"");
-    let parts = as_or(&expr);
-    assert_eq!(parts.len(), 2);
-    word_is(&parts[0], "a");
-    assert!(is_empty(&parts[1]));
+    assert!(is_empty(&expr));
 }
 
 #[test]

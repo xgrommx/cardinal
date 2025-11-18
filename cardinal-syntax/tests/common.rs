@@ -152,6 +152,5 @@ pub fn assert_keyword_and_gaps(expr: &Expr) {
 }
 
 pub fn assert_keyword_or_gaps(expr: &Expr) {
-    let parts = as_or(expr);
-    assert!(parts.iter().any(|e| matches!(e, Expr::Empty)));
+    assert!(matches!(expr, Expr::Empty));
 }

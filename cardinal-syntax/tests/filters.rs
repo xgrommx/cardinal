@@ -77,3 +77,14 @@ fn dm_and_dc_filters_are_moved_to_the_end_of_and_chain() {
     filter_is_kind(&parts[2], &FilterKind::DateModified);
     filter_is_kind(&parts[3], &FilterKind::DateCreated);
 }
+
+#[test]
+fn metadata_filters_preserve_relative_order() {
+    let expr = parse_ok("foo dc:thisweek bar dm:pastmonth dc:lastyear");
+    let parts = as_and(&expr);
+    word_is(&parts[0], "foo");
+    word_is(&parts[1], "bar");
+    filter_is_kind(&parts[2], &FilterKind::DateCreated);
+    filter_is_kind(&parts[3], &FilterKind::DateModified);
+    filter_is_kind(&parts[4], &FilterKind::DateCreated);
+}

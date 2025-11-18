@@ -48,7 +48,14 @@ fn optimize_expr(expr: Expr) -> Expr {
             reorder_metadata_filters(&mut parts);
             Expr::And(parts)
         }
-        Expr::Or(parts) => Expr::Or(parts.into_iter().map(optimize_expr).collect()),
+        Expr::Or(parts) => {
+            let parts: Vec<Expr> = parts.into_iter().map(optimize_expr).collect();
+            if parts.iter().any(|expr| matches!(expr, Expr::Empty)) {
+                Expr::Empty
+            } else {
+                Expr::Or(parts)
+            }
+        }
         Expr::Not(inner) => Expr::Not(Box::new(optimize_expr(*inner))),
         Expr::Term(_) | Expr::Empty => expr,
     }
@@ -1446,19 +1453,19 @@ mod tests {
     #[test]
     fn parses_or_with_trailing_empty_operand() {
         let query = parse_query("kksk | ").unwrap();
-        assert_eq!(query.expr, Expr::Or(vec![word("kksk"), Expr::Empty]));
+        assert_eq!(query.expr, Expr::Empty);
     }
 
     #[test]
     fn parses_or_with_only_empty_operands() {
         let query = parse_query(" | ").unwrap();
-        assert_eq!(query.expr, Expr::Or(vec![Expr::Empty, Expr::Empty]));
+        assert_eq!(query.expr, Expr::Empty);
     }
 
     #[test]
     fn parses_or_with_leading_empty_operand() {
         let query = parse_query("| foo").unwrap();
-        assert_eq!(query.expr, Expr::Or(vec![Expr::Empty, word("foo")]));
+        assert_eq!(query.expr, Expr::Empty);
     }
 
     #[test]
@@ -1470,19 +1477,13 @@ mod tests {
     #[test]
     fn parses_or_with_consecutive_separators() {
         let query = parse_query("foo||bar").unwrap();
-        assert_eq!(
-            query.expr,
-            Expr::Or(vec![word("foo"), Expr::Empty, word("bar")])
-        );
+        assert_eq!(query.expr, Expr::Empty);
     }
 
     #[test]
     fn parses_or_with_empty_operands_on_both_sides() {
         let query = parse_query("| foo |").unwrap();
-        assert_eq!(
-            query.expr,
-            Expr::Or(vec![Expr::Empty, word("foo"), Expr::Empty])
-        );
+        assert_eq!(query.expr, Expr::Empty);
     }
 
     #[test]
