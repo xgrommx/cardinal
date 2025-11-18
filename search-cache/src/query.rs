@@ -1153,7 +1153,8 @@ fn filter_nodes(
 ) -> Option<Vec<SlabIndex>> {
     let mut filtered = Vec::with_capacity(nodes.len());
     for (i, index) in nodes.into_iter().enumerate() {
-        if i % CANCEL_CHECK_INTERVAL == 0 && token.is_cancelled() {
+        // While filtering dc: dm:, lstat is slow. Thus we check cancellation more frequently.
+        if i % (CANCEL_CHECK_INTERVAL / 4) == 0 && token.is_cancelled() {
             return None;
         }
         if predicate(index) {
