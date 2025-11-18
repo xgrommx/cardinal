@@ -99,11 +99,11 @@ fn textual_keywords_with_boundaries() {
     let inner = as_not(&expr);
     word_is(inner, "/Users");
 
-    // AND with gaps should yield empty operands around it
+    // AND with gaps should reduce to empty
     let expr = parse_ok(" AND ");
-    assert_keyword_and_gaps(&expr);
+    assert!(is_empty(&expr));
 
-    // OR with gaps should yield empty operands too
+    // OR with gaps should reduce to empty
     let expr = parse_ok(" | ");
-    assert_keyword_or_gaps(&expr);
+    assert!(is_empty(&expr));
 }

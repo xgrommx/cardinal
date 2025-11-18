@@ -4,18 +4,6 @@
 //! the rest of Cardinal can reason about filters, boolean logic, and phrases
 //! without duplicating the parsing rules from the original Windows tool. Any
 //! example shown in that manual should be accepted by [`parse_query`].
-//!
-//! ## Example
-//! ```
-//! use cardinal_syntax::{parse_query, Expr, Term};
-//!
-//! let query = parse_query("folder: dm:pastmonth ext:docx report").unwrap();
-//! if let Expr::And(parts) = query.expr {
-//!     // `folder:` (no argument), `dm:pastmonth`, `ext:docx`, and the bare word.
-//!     assert_eq!(parts.len(), 4);
-//!     assert!(matches!(parts[3], Expr::Term(Term::Word(ref word)) if word == "report"));
-//! }
-//! ```
 
 use std::fmt;
 
@@ -43,27 +31,50 @@ fn optimize_query(mut query: Query) -> Query {
 
 fn optimize_expr(expr: Expr) -> Expr {
     match expr {
-        Expr::And(parts) => {
-            let mut parts: Vec<Expr> = parts.into_iter().map(optimize_expr).collect();
-            reorder_metadata_filters(&mut parts);
-            Expr::And(parts)
-        }
-        Expr::Or(parts) => {
-            let parts: Vec<Expr> = parts.into_iter().map(optimize_expr).collect();
-            if parts.iter().any(|expr| matches!(expr, Expr::Empty)) {
-                Expr::Empty
-            } else {
-                Expr::Or(parts)
-            }
-        }
+        Expr::And(parts) => optimize_and(parts),
+        Expr::Or(parts) => optimize_or(parts),
         Expr::Not(inner) => Expr::Not(Box::new(optimize_expr(*inner))),
         Expr::Term(_) | Expr::Empty => expr,
     }
 }
 
-fn reorder_metadata_filters(parts: &mut Vec<Expr>) {
-    if parts.len() <= 1 || !parts.iter().any(is_metadata_filter) {
-        return;
+fn optimize_and(parts: Vec<Expr>) -> Expr {
+    let mut parts: Vec<Expr> = parts
+        .into_iter()
+        .map(optimize_expr)
+        .filter(|expr| !matches!(expr, Expr::Empty))
+        .collect();
+
+    match parts.len() {
+        0 => Expr::Empty,
+        1 => parts.pop().unwrap(),
+        _ => {
+            move_metadata_filters_to_tail(&mut parts);
+            Expr::And(parts)
+        }
+    }
+}
+
+fn optimize_or(parts: Vec<Expr>) -> Expr {
+    let parts: Vec<Expr> = parts.into_iter().map(optimize_expr).collect();
+    if parts.iter().any(|expr| matches!(expr, Expr::Empty)) {
+        Expr::Empty
+    } else {
+        Expr::Or(parts)
+    }
+}
+
+fn move_metadata_filters_to_tail(parts: &mut Vec<Expr>) -> bool {
+    if parts.len() <= 1 {
+        return false;
+    }
+
+    let Some(first) = parts.iter().position(is_metadata_filter) else {
+        return false;
+    };
+
+    if parts[first..].iter().all(is_metadata_filter) {
+        return false;
     }
 
     let mut reordered = Vec::with_capacity(parts.len());
@@ -79,6 +90,7 @@ fn reorder_metadata_filters(parts: &mut Vec<Expr>) {
 
     parts.extend(reordered);
     parts.extend(metadata);
+    true
 }
 
 fn is_metadata_filter(expr: &Expr) -> bool {
@@ -1418,13 +1430,13 @@ mod tests {
     #[test]
     fn parses_and_with_leading_empty_operand() {
         let query = parse_query("  AND foo").unwrap();
-        assert_eq!(query.expr, Expr::And(vec![Expr::Empty, word("foo")]));
+        assert_eq!(query.expr, word("foo"));
     }
 
     #[test]
     fn parses_and_with_trailing_empty_operand() {
         let query = parse_query("foo AND ").unwrap();
-        assert_eq!(query.expr, Expr::And(vec![word("foo"), Expr::Empty]));
+        assert_eq!(query.expr, word("foo"));
     }
 
     #[test]
@@ -1471,7 +1483,7 @@ mod tests {
     #[test]
     fn parses_and_with_only_empty_operands() {
         let query = parse_query(" AND ").unwrap();
-        assert_eq!(query.expr, Expr::And(vec![Expr::Empty, Expr::Empty]));
+        assert_eq!(query.expr, Expr::Empty);
     }
 
     #[test]

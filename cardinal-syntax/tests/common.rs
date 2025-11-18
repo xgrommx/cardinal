@@ -144,13 +144,3 @@ pub fn filter_arg_is_comparison(expr: &Expr, op: ComparisonOp, value: &str) {
         other => panic!("expected Comparison, got: {other:?}"),
     }
 }
-
-pub fn assert_keyword_and_gaps(expr: &Expr) {
-    // Expect `Expr::And` possibly containing `Expr::Empty` from keyword AND parsing.
-    let parts = as_and(expr);
-    assert!(parts.iter().any(|e| matches!(e, Expr::Empty)));
-}
-
-pub fn assert_keyword_or_gaps(expr: &Expr) {
-    assert!(matches!(expr, Expr::Empty));
-}
