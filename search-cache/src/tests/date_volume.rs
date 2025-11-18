@@ -13,6 +13,11 @@ use jiff::{civil::Date, tz::TimeZone};
 #[test]
 fn segment_1_date_keyword_basic() {
     let tmp = TempDir::new("seg1_keywords").unwrap();
+    println!(
+        "[seg1] temp dir: {:?}, system tz: {:?}",
+        tmp.path(),
+        TimeZone::system()
+    );
     for name in [
         "today_a.txt",
         "yesterday_b.txt",
@@ -32,12 +37,19 @@ fn segment_1_date_keyword_basic() {
     let year_idx = cache.search("year_e.txt").unwrap()[0];
 
     let now = Timestamp::now().as_second();
+    println!("[seg1] base now={now} (ts), day={SECONDS_PER_DAY}s");
     set_file_times(&mut cache, today_idx, now, now);
+    println!("[seg1] today idx={today_idx:?} file=today_a.txt -> {now}");
     set_file_times(
         &mut cache,
         yest_idx,
         now - SECONDS_PER_DAY,
         now - SECONDS_PER_DAY,
+    );
+    println!(
+        "[seg1] yesterday idx={:?} -> {}",
+        yest_idx,
+        now - SECONDS_PER_DAY
     );
     set_file_times(
         &mut cache,
@@ -45,11 +57,21 @@ fn segment_1_date_keyword_basic() {
         now - 6 * SECONDS_PER_DAY,
         now - 6 * SECONDS_PER_DAY,
     );
+    println!(
+        "[seg1] week idx={:?} -> {}",
+        week_idx,
+        now - 6 * SECONDS_PER_DAY
+    );
     set_file_times(
         &mut cache,
         month_idx,
         now - 25 * SECONDS_PER_DAY,
         now - 25 * SECONDS_PER_DAY,
+    );
+    println!(
+        "[seg1] month idx={:?} -> {}",
+        month_idx,
+        now - 25 * SECONDS_PER_DAY
     );
     set_file_times(
         &mut cache,
@@ -57,20 +79,32 @@ fn segment_1_date_keyword_basic() {
         now - 200 * SECONDS_PER_DAY,
         now - 200 * SECONDS_PER_DAY,
     );
+    println!(
+        "[seg1] year idx={:?} -> {}",
+        year_idx,
+        now - 200 * SECONDS_PER_DAY
+    );
 
     // today
     let today_hits = cache.search("dm:today").unwrap();
-    assert_eq!(list_names(&cache, &today_hits), vec!["today_a.txt"]);
+    let today_names = list_names(&cache, &today_hits);
+    println!("[seg1] dm:today => {today_names:?}");
+    assert_eq!(today_names, vec!["today_a.txt"]);
     // yesterday
     let yest_hits = cache.search("dm:yesterday").unwrap();
-    assert_eq!(list_names(&cache, &yest_hits), vec!["yesterday_b.txt"]);
+    let yest_names = list_names(&cache, &yest_hits);
+    println!("[seg1] dm:yesterday => {yest_names:?}");
+    assert_eq!(yest_names, vec!["yesterday_b.txt"]);
     // pastweek should include today + yesterday + week_c
     let pastweek_hits = cache.search("dm:pastweek").unwrap();
+    let pastweek_names = list_names(&cache, &pastweek_hits);
     let mut expected = vec!["today_a.txt", "week_c.txt", "yesterday_b.txt"];
     expected.sort();
-    assert_eq!(list_names(&cache, &pastweek_hits), expected);
+    println!("[seg1] dm:pastweek => {pastweek_names:?}, expected {expected:?}");
+    assert_eq!(pastweek_names, expected);
     // pastmonth should include all except year_e.txt
     let pastmonth_hits = cache.search("dm:pastmonth").unwrap();
+    let pastmonth_names = list_names(&cache, &pastmonth_hits);
     let mut expected2 = vec![
         "today_a.txt",
         "week_c.txt",
@@ -78,9 +112,11 @@ fn segment_1_date_keyword_basic() {
         "month_d.txt",
     ];
     expected2.sort();
-    assert_eq!(list_names(&cache, &pastmonth_hits), expected2);
+    println!("[seg1] dm:pastmonth => {pastmonth_names:?}, expected {expected2:?}");
+    assert_eq!(pastmonth_names, expected2);
     // pastyear should include everything
     let pastyear_hits = cache.search("dm:pastyear").unwrap();
+    let pastyear_names = list_names(&cache, &pastyear_hits);
     let mut expected3 = vec![
         "today_a.txt",
         "week_c.txt",
@@ -89,15 +125,21 @@ fn segment_1_date_keyword_basic() {
         "year_e.txt",
     ];
     expected3.sort();
-    assert_eq!(list_names(&cache, &pastyear_hits), expected3);
+    println!("[seg1] dm:pastyear => {pastyear_names:?}, expected {expected3:?}");
+    assert_eq!(pastyear_names, expected3);
 
     // thisweek vs lastweek synthetic: shift week_c to lastweek
     let lastweek_ts = now - 8 * SECONDS_PER_DAY;
     set_file_times(&mut cache, week_idx, lastweek_ts, lastweek_ts);
+    println!("[seg1] updated week idx={week_idx:?} -> {lastweek_ts} (lastweek scenario)");
     let thisweek_hits = cache.search("dm:thisweek").unwrap();
-    assert!(list_names(&cache, &thisweek_hits).contains(&"today_a.txt".to_string()));
+    let thisweek_names = list_names(&cache, &thisweek_hits);
+    println!("[seg1] dm:thisweek => {thisweek_names:?}");
+    assert!(thisweek_names.contains(&"today_a.txt".to_string()));
     let lastweek_hits = cache.search("dm:lastweek").unwrap();
-    assert_eq!(list_names(&cache, &lastweek_hits), vec!["week_c.txt"]);
+    let lastweek_names = list_names(&cache, &lastweek_hits);
+    println!("[seg1] dm:lastweek => {lastweek_names:?}");
+    assert_eq!(lastweek_names, vec!["week_c.txt"]);
 }
 
 // Segment 2 ----------------------------------------------------------------
