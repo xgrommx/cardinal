@@ -26,6 +26,7 @@ export function useContextMenu(autoFitColumns: (() => void) | null = null): UseC
         {
           id: 'context_menu.open_in_finder',
           text: t('contextMenu.openInFinder'),
+          accelerator: 'Cmd+R',
           action: () => {
             void invoke('open_in_finder', { path });
           },
@@ -33,6 +34,7 @@ export function useContextMenu(autoFitColumns: (() => void) | null = null): UseC
         {
           id: 'context_menu.copy_path',
           text: t('contextMenu.copyPath'),
+          accelerator: 'Cmd+C',
           action: () => {
             if (navigator?.clipboard?.writeText) {
               void navigator.clipboard.writeText(path);
