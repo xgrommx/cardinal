@@ -51,7 +51,8 @@
     "aria": {
       "status": "应用状态：{{status}}",
       "tablist": "搜索状态视图",
-      "rescan": "触发文件系统重新扫描"
+      "rescan": "触发文件系统重新扫描",
+      "settings": "打开偏好设置"
     },
     "rescan": {
       "disabledHint": "Cardinal 准备就绪后即可重新扫描。",
@@ -87,6 +88,16 @@
     "quit": "退出 {{appName}}",
     "help": "帮助",
     "getUpdates": "获取更新"
+  },
+  "preferences": {
+    "title": "偏好设置",
+    "heading": "自定义 Cardinal",
+    "subtitle": "随心调整外观和语言。",
+    "appearance": "外观",
+    "themeHint": "选择浅色、深色或跟随系统。",
+    "language": "语言",
+    "languageHint": "立即切换界面语言。",
+    "close": "关闭"
   },
   "language": {
     "label": "语言",

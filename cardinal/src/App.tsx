@@ -5,6 +5,7 @@ import { FileRow } from './components/FileRow';
 import { SearchBar } from './components/SearchBar';
 import { FilesTabContent } from './components/FilesTabContent';
 import { PermissionOverlay } from './components/PermissionOverlay';
+import PreferencesOverlay from './components/PreferencesOverlay';
 import StatusBar from './components/StatusBar';
 import type { StatusTabKey } from './components/StatusBar';
 import type { SearchResultItem } from './types/search';
@@ -24,6 +25,7 @@ import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useTranslation } from 'react-i18next';
 import type { SlabIndex } from './types/slab';
 import { useFullDiskAccessPermission } from './hooks/useFullDiskAccessPermission';
+import { OPEN_PREFERENCES_EVENT } from './constants/appEvents';
 
 type ActiveTab = StatusTabKey;
 
@@ -129,6 +131,7 @@ function App() {
     isChecking: isCheckingFullDiskAccess,
     requestPermission: requestFullDiskAccessPermission,
   } = useFullDiskAccessPermission();
+  const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const selectedIndex = selectedRow?.index ?? null;
   const selectedPath = selectedRow?.path ?? null;
 
@@ -193,6 +196,13 @@ function App() {
   useEffect(() => {
     focusSearchInput();
   }, [focusSearchInput]);
+
+  useEffect(() => {
+    const handleOpenPreferences = () => setIsPreferencesOpen(true);
+
+    window.addEventListener(OPEN_PREFERENCES_EVENT, handleOpenPreferences);
+    return () => window.removeEventListener(OPEN_PREFERENCES_EVENT, handleOpenPreferences);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -558,7 +568,7 @@ function App() {
 
   return (
     <>
-      <main className="container" aria-hidden={showFullDiskAccessOverlay}>
+      <main className="container" aria-hidden={showFullDiskAccessOverlay || isPreferencesOpen}>
         <SearchBar
           inputRef={searchInputRef}
           value={searchInputValue}
@@ -607,6 +617,7 @@ function App() {
           onRequestRescan={requestRescan}
         />
       </main>
+      <PreferencesOverlay open={isPreferencesOpen} onClose={() => setIsPreferencesOpen(false)} />
       {showFullDiskAccessOverlay && (
         <PermissionOverlay
           title={t('app.fullDiskAccess.title')}

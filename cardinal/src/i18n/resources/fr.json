@@ -51,7 +51,8 @@
     "aria": {
       "status": "État de l'application : {{status}}",
       "tablist": "Vue de l'état de recherche",
-      "rescan": "Lancer un nouveau scan du système de fichiers"
+      "rescan": "Lancer un nouveau scan du système de fichiers",
+      "settings": "Ouvrir les préférences"
     },
     "rescan": {
       "disabledHint": "Le nouveau scan sera disponible lorsque Cardinal sera prêt.",
@@ -88,6 +89,16 @@
     "quit": "Quitter {{appName}}",
     "help": "Aide",
     "getUpdates": "Obtenir les mises à jour"
+  },
+  "preferences": {
+    "title": "Préférences",
+    "heading": "Personnalisez Cardinal",
+    "subtitle": "Réglez l'apparence et la langue.",
+    "appearance": "Apparence",
+    "themeHint": "Choisissez clair, sombre ou selon le système.",
+    "language": "Langue",
+    "languageHint": "Changez la langue de l'interface instantanément.",
+    "close": "Fermer"
   },
   "language": {
     "label": "Langue",

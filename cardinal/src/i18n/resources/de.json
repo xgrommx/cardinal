@@ -51,7 +51,8 @@
     "aria": {
       "status": "Anwendungsstatus: {{status}}",
       "tablist": "Ansicht des Suchstatus",
-      "rescan": "Dateisystem erneut scannen"
+      "rescan": "Dateisystem erneut scannen",
+      "settings": "Einstellungen öffnen"
     },
     "rescan": {
       "disabledHint": "Der erneute Scan ist verfügbar, sobald Cardinal bereit ist.",
@@ -88,6 +89,16 @@
     "quit": "{{appName}} beenden",
     "help": "Hilfe",
     "getUpdates": "Updates abrufen"
+  },
+  "preferences": {
+    "title": "Einstellungen",
+    "heading": "Passe Cardinal an",
+    "subtitle": "Stelle Erscheinungsbild und Sprache ein.",
+    "appearance": "Darstellung",
+    "themeHint": "Wähle Hell, Dunkel oder Systemstandard.",
+    "language": "Sprache",
+    "languageHint": "Wechsle die Oberflächensprache sofort.",
+    "close": "Schließen"
   },
   "language": {
     "label": "Sprache",

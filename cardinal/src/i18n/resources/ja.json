@@ -51,7 +51,8 @@
     "aria": {
       "status": "アプリケーションの状態: {{status}}",
       "tablist": "検索ステータスビュー",
-      "rescan": "ファイルシステムの再スキャンを実行"
+      "rescan": "ファイルシステムの再スキャンを実行",
+      "settings": "環境設定を開く"
     },
     "rescan": {
       "disabledHint": "Cardinal の準備が整うと再スキャンを利用できます。",
@@ -88,6 +89,16 @@
     "quit": "{{appName}} を終了",
     "help": "ヘルプ",
     "getUpdates": "アップデートを入手"
+  },
+  "preferences": {
+    "title": "環境設定",
+    "heading": "Cardinal を自分好みに",
+    "subtitle": "見た目と言語を調整します。",
+    "appearance": "表示",
+    "themeHint": "ライト / ダーク / システムから選択。",
+    "language": "言語",
+    "languageHint": "UI 言語をすぐに切り替えます。",
+    "close": "閉じる"
   },
   "language": {
     "label": "言語",

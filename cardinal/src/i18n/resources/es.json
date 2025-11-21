@@ -51,7 +51,8 @@
     "aria": {
       "status": "Estado de la aplicación: {{status}}",
       "tablist": "Vista de estado de búsqueda",
-      "rescan": "Lanzar reexploración del sistema de archivos"
+      "rescan": "Lanzar reexploración del sistema de archivos",
+      "settings": "Abrir preferencias"
     },
     "rescan": {
       "disabledHint": "El reescaneo estará disponible cuando Cardinal esté listo.",
@@ -88,6 +89,16 @@
     "quit": "Salir de {{appName}}",
     "help": "Ayuda",
     "getUpdates": "Obtener actualizaciones"
+  },
+  "preferences": {
+    "title": "Preferencias",
+    "heading": "Haz que Cardinal sea tuyo",
+    "subtitle": "Ajusta la apariencia y el idioma.",
+    "appearance": "Apariencia",
+    "themeHint": "Elige claro, oscuro o según el sistema.",
+    "language": "Idioma",
+    "languageHint": "Cambia el idioma de la interfaz al instante.",
+    "close": "Cerrar"
   },
   "language": {
     "label": "Idioma",

@@ -2,8 +2,7 @@ import React, { useCallback, useRef, useLayoutEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { AppLifecycleStatus } from '../types/ipc';
 import { useTranslation } from 'react-i18next';
-import LanguageSwitcher from './LanguageSwitcher';
-import ThemeSwitcher from './ThemeSwitcher';
+import { OPEN_PREFERENCES_EVENT } from '../constants/appEvents';
 
 export type StatusTabKey = 'files' | 'events';
 
@@ -103,6 +102,11 @@ const StatusBar = ({
     onRequestRescan?.();
   }, [onRequestRescan, rescanDisabled]);
 
+  const handleOpenPreferences = useCallback(() => {
+    const event = new Event(OPEN_PREFERENCES_EVENT);
+    window.dispatchEvent(event);
+  }, []);
+
   return (
     <div className="status-bar">
       <div className="status-left">
@@ -160,8 +164,16 @@ const StatusBar = ({
             </span>
             <span className="sr-only">{t('statusBar.aria.rescan')}</span>
           </button>
-          <ThemeSwitcher className="status-icon-button status-theme-switcher" />
-          <LanguageSwitcher className="status-icon-button status-language-switcher" />
+          <button
+            type="button"
+            className="status-icon-button status-settings-button"
+            onClick={handleOpenPreferences}
+            title={t('statusBar.aria.settings')}
+            aria-label={t('statusBar.aria.settings')}
+          >
+            <span aria-hidden="true">⚙</span>
+            <span className="sr-only">{t('statusBar.aria.settings')}</span>
+          </button>
         </div>
       </div>
 

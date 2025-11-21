@@ -51,7 +51,8 @@
     "aria": {
       "status": "Application status: {{status}}",
       "tablist": "Search status view",
-      "rescan": "Trigger filesystem rescan"
+      "rescan": "Trigger filesystem rescan",
+      "settings": "Open preferences"
     },
     "rescan": {
       "disabledHint": "Rescan becomes available once Cardinal is ready.",
@@ -88,6 +89,16 @@
     "quit": "Quit {{appName}}",
     "help": "Help",
     "getUpdates": "Get Updates"
+  },
+  "preferences": {
+    "title": "Preferences",
+    "heading": "Make Cardinal yours",
+    "subtitle": "Adjust appearance and language to your liking.",
+    "appearance": "Appearance",
+    "themeHint": "Choose light, dark, or follow the system.",
+    "language": "Language",
+    "languageHint": "Switch the interface language instantly.",
+    "close": "Close"
   },
   "language": {
     "label": "Language",
