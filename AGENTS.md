@@ -1,30 +1,27 @@
 # Repository Guidelines
 
-> Quick reminder: these notes mirror the public [CONTRIBUTING.md](./CONTRIBUTING.md). Keep both documents in sync when updating workflows or tooling.
-
 ## Project Structure & Module Organization
-- `cardinal/` hosts the Tauri + React desktop client; UI code sits in `src/`, and native glue lives in `src-tauri/`.
-- The Rust workspace (root `Cargo.toml`) tracks `lsf/` (CLI entry), `cardinal-sdk/` (shared types), `fswalk/` (filesystem traversal), `fs-icon/` (icon extraction), `namepool/`, `query-segmentation/`, and `search-cache/`.
-- Toolchain pinning (`nightly-2025-05-09`) and import grouping rules sit at the repository root. Keep generated artifacts like `target/` and `cardinal/dist/` out of commits.
+- Desktop app lives in `cardinal/` (React UI in `src/`, Tauri/native glue in `src-tauri/`, build output in `cardinal/dist/`).
+- Workspace crates (root `Cargo.toml`): `lsf/` (CLI), `cardinal-sdk/` (shared types), `fswalk/`, `fs-icon/`, `namepool/`, `query-segmentation/`, `search-cache/`, `search-cancel/`, `cardinal-syntax/`.
+- Tests sit next to code; cross-crate cases belong in each crate’s `tests/` directory. Generated outputs (`target/`, `cardinal/dist/`, vendor bundles) stay out of commits.
+- Toolchain pinned via `rust-toolchain.toml` (`nightly-2025-05-09`); install with `rustup toolchain install nightly-2025-05-09`.
 
 ## Build, Test, and Development Commands
-- `cargo check --workspace` validates all Rust crates; run before pushing cross-crate changes.
-- `cargo test --workspace` executes unit and integration suites; narrow scope with `-p <crate>` (e.g., `cargo test -p lsf`).
-- `cargo clippy --workspace --all-targets` surfaces lint issues; address warnings or document allowances.
-- Front-end flows: `cd cardinal && npm run dev` for the Vite server, `npm run tauri dev -- --release --features dev` for the desktop shell, `npm run tauri build` for release binaries, and `npm run build` for the static bundle.
+- `cargo check --workspace` — fast compile validation for all crates.
+- `cargo test --workspace` or `cargo test -p <crate>` — run full or targeted suites.
+- `cargo clippy --workspace --all-targets` — lint; fix or explain warnings. `cargo fmt --all` — enforce workspace rustfmt settings.
+- Frontend: `cd cardinal && npm ci` (install), `npm run dev` (Vite), `npm run tauri dev -- --release --features dev` (desktop shell), `npm run build` (static bundle), `npm run tauri build` (release binaries).
 
 ## Coding Style & Naming Conventions
-- Run `cargo fmt --all` to honour repository-wide `rustfmt` settings (grouped crate imports, 4-space indent). Modules, files, and functions stay `snake_case`; types and traits use `PascalCase`.
-- Prefer explicit modules over glob imports; rely on `tracing` for structured logs and return `anyhow::Result` from fallible Rust APIs.
-- React components in `cardinal/src/components` follow `PascalCase.tsx`; hooks and utilities keep `camelCase` exports inside `kebab-case` folders.
-- Use `npm run format` or `npm run format:check` to enforce Prettier defaults before committing UI changes.
+- Rust: grouped imports, 4-space indent, `snake_case` for modules/functions, `PascalCase` for types/traits. Prefer explicit modules, return `anyhow::Result` from fallible APIs, and use `tracing` for structured logs.
+- React: components in `cardinal/src/components` use `PascalCase.tsx`; hooks/utilities export camelCase from kebab-case folders. Run `npm run format` or `npm run format:check` (Prettier). Keep Vite and `tsconfig*.json` settings intact.
 
 ## Testing Guidelines
-- Place Rust tests alongside the logic they cover; use a crate-level `tests/` folder for cross-cutting scenarios.
-- Run `cargo test --workspace` after touching shared crates, and `cargo test -p lsf` when altering query or indexing code.
-- For UI and performance validation, follow `TESTING.md`: rebuild with `npm run build`, profile in Chrome DevTools/Safari, and capture FPS or memory regressions.
+- Co-locate unit tests; add crate-level integration tests for cross-cutting behaviors.
+- Run `cargo test --workspace` after shared-crate changes; target `cargo test -p lsf` for query/indexing paths. Name tests for the behavior under test and include edge cases (search latency, indexing throughput, icon extraction).
+- UI/performance: per `TESTING.md`, `npm run build`, then profile in Chrome DevTools/Safari and monitor FPS/memory regressions.
 
 ## Commit & Pull Request Guidelines
-- Follow Conventional Commits (`feat:`, `fix:`, `chore:`). Add scopes when useful (`feat(fs-icon): cache lookups`).
-- Squash WIP commits before review. Reference related issues and note impacted crates or UI surfaces.
-- PRs should report the `cargo`/`npm` commands executed, attach UI screenshots when applicable, and highlight any risk areas (indexing throughput, icon rendering, search latency).
+- Use Conventional Commits (`feat:`, `fix:`, `chore:`) with scopes when helpful (e.g., `feat(fs-icon): cache lookups`); squash WIP commits.
+- PRs should list cargo/npm commands run, link issues, include UI screenshots when relevant, and call out risks (indexing throughput, search latency, icon extraction).
+- Avoid committing generated or vendor outputs; note any intentional lint allowlists or config deviations in the PR.
