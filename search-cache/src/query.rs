@@ -640,16 +640,12 @@ impl SearchCache {
             .filter_map(|index| self.node_path(index).map(|path| (index, path)))
             .par_bridge()
             .filter_map(|(index, path)| {
-                let Some(matched) =
-                    self.node_content_matches(&path, needle, options.case_insensitive, token)
-                else {
-                    return None;
-                };
-                matched.then(|| index)
+                self.node_content_matches(&path, needle, options.case_insensitive, token)?
+                    .then_some(index)
             })
             .collect();
 
-        Ok((!token.is_cancelled()).then(|| matched_indices))
+        Ok((!token.is_cancelled()).then_some(matched_indices))
     }
 
     /// user need to ensure that needle is lowercased when case_insensitive is set
@@ -700,7 +696,7 @@ impl SearchCache {
                         Ok(count) => count,
                         Err(_) => return Some(false),
                     };
-                    if buffer[..read].iter().any(|&c| c == needle) {
+                    if buffer[..read].contains(&needle) {
                         return Some(true);
                     }
                 }

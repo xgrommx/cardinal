@@ -1,14 +1,12 @@
 use search_cache::{SearchCache, SearchOptions, SlabIndex};
 use search_cancel::CancellationToken;
-use std::{fs, iter};
+use std::fs;
 use tempdir::TempDir;
 
 // Public constant from the implementation
 const CONTENT_BUFFER_BYTES: usize = 64 * 1024;
 
-fn guard_indices(
-    result: Result<search_cache::SearchOutcome, anyhow::Error>,
-) -> Vec<SlabIndex> {
+fn guard_indices(result: Result<search_cache::SearchOutcome, anyhow::Error>) -> Vec<SlabIndex> {
     result
         .expect("search should succeed")
         .nodes
@@ -31,10 +29,12 @@ fn content_filter_rejects_empty_needle() {
         CancellationToken::noop(),
     );
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("content: requires a value"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("content: requires a value")
+    );
 }
 
 /// Test single-byte needle - exact match (case sensitive)
@@ -162,7 +162,7 @@ fn content_filter_needle_exceeds_buffer_size() {
     let dir = temp_dir.path();
 
     let needle_len = CONTENT_BUFFER_BYTES + 1000;
-    let needle: String = iter::repeat('N').take(needle_len).collect();
+    let needle: String = std::iter::repeat_n('N', needle_len).collect();
 
     let mut payload = vec![b'x'; 50];
     payload.extend_from_slice(needle.as_bytes());
@@ -170,7 +170,7 @@ fn content_filter_needle_exceeds_buffer_size() {
     fs::write(dir.join("long_needle.bin"), &payload).unwrap();
 
     let mut cache = SearchCache::walk_fs(dir.to_path_buf());
-    let query = format!("content:{}", needle);
+    let query = format!("content:{needle}");
     let indices = guard_indices(cache.search_with_options(
         &query,
         SearchOptions {
@@ -398,7 +398,7 @@ fn content_filter_special_characters() {
         CancellationToken::noop(),
     ));
     assert_eq!(indices.len(), 1);
-    
+
     // Test parentheses
     let indices = guard_indices(cache.search_with_options(
         r#"content:"&*()""#,
@@ -485,7 +485,7 @@ fn content_filter_combined_with_infolder() {
     let mut cache = SearchCache::walk_fs(dir.to_path_buf());
 
     let target_path = dir.join("target").to_str().unwrap().to_string();
-    let query = format!("infolder:{} content:\"secret key\"", target_path);
+    let query = format!("infolder:{target_path} content:\"secret key\"");
     let indices = guard_indices(cache.search_with_options(
         &query,
         SearchOptions {
@@ -581,7 +581,7 @@ fn content_filter_respects_cancellation() {
     // Create multiple large files
     for i in 0..10 {
         let content = vec![b'x'; CONTENT_BUFFER_BYTES * 2];
-        fs::write(dir.join(format!("large{}.bin", i)), content).unwrap();
+        fs::write(dir.join(format!("large{i}.bin")), content).unwrap();
     }
 
     let mut cache = SearchCache::walk_fs(dir.to_path_buf());
@@ -711,11 +711,7 @@ fn content_filter_whitespace_in_needle() {
     let temp_dir = TempDir::new("content_whitespace").unwrap();
     let dir = temp_dir.path();
 
-    fs::write(
-        dir.join("whitespace.txt"),
-        b"line one word three   spaced",
-    )
-    .unwrap();
+    fs::write(dir.join("whitespace.txt"), b"line one word three   spaced").unwrap();
 
     let mut cache = SearchCache::walk_fs(dir.to_path_buf());
 
@@ -753,13 +749,13 @@ fn content_filter_case_insensitive_mixed_case() {
     // All variations should match case-insensitively (using quoted strings)
     for needle in ["thisismixedcase", "THISISMIXEDCASE", "ThIsIsMiXeDCaSe"] {
         let indices = guard_indices(cache.search_with_options(
-            &format!(r#"content:"{}""#, needle),
+            &format!(r#"content:"{needle}""#),
             SearchOptions {
                 case_insensitive: true,
             },
             CancellationToken::noop(),
         ));
-        assert_eq!(indices.len(), 1, "Failed for needle: {}", needle);
+        assert_eq!(indices.len(), 1, "Failed for needle: {needle}");
     }
 }
 

@@ -725,7 +725,7 @@ pub static NAME_POOL: LazyLock<NamePool> = LazyLock::new(NamePool::new);
 mod tests {
     use super::*;
     use crate::query::CONTENT_BUFFER_BYTES;
-    use std::{fs, iter, path::PathBuf};
+    use std::{fs, path::PathBuf};
     use tempdir::TempDir;
 
     fn guard_indices(result: Result<SearchOutcome>) -> Vec<SlabIndex> {
@@ -1098,7 +1098,7 @@ mod tests {
 
         let mut payload = vec![b'a'; CONTENT_BUFFER_BYTES.saturating_sub(1)];
         payload.extend_from_slice(b"XYZ");
-        payload.extend(iter::repeat(b'a').take(32));
+        payload.extend(std::iter::repeat_n(b'a', 32));
         fs::write(dir.join("large.bin"), &payload).unwrap();
 
         let mut cache = SearchCache::walk_fs(dir.to_path_buf());
@@ -1117,7 +1117,8 @@ mod tests {
 
     #[test]
     fn content_filter_single_byte_respects_case_sensitivity() {
-        let temp_dir = TempDir::new("content_filter_single_byte_respects_case_sensitivity").unwrap();
+        let temp_dir =
+            TempDir::new("content_filter_single_byte_respects_case_sensitivity").unwrap();
         let dir = temp_dir.path();
 
         fs::write(dir.join("letters.txt"), b"AaBb").unwrap();
@@ -1141,7 +1142,7 @@ mod tests {
             CancellationToken::noop(),
         ));
         assert_eq!(sensitive.len(), 1); // File contains lowercase 'a'
-        
+
         // But searching for uppercase 'A' case-sensitively should also work
         let sensitive_upper = guard_indices(cache.search_with_options(
             "content:A",
@@ -1151,7 +1152,7 @@ mod tests {
             CancellationToken::noop(),
         ));
         assert_eq!(sensitive_upper.len(), 1);
-        
+
         // Searching for 'z' should return nothing
         let no_match = guard_indices(cache.search_with_options(
             "content:z",
@@ -1173,7 +1174,7 @@ mod tests {
         let mut payload = vec![b'a'; CONTENT_BUFFER_BYTES.saturating_sub(1)];
         payload.push(b'X'); // last byte of first chunk
         payload.extend_from_slice(b"YZ"); // spans into second chunk
-        payload.extend(iter::repeat(b'a').take(32));
+        payload.extend(std::iter::repeat_n(b'a', 32));
         fs::write(dir.join("boundary.bin"), &payload).unwrap();
 
         let mut cache = SearchCache::walk_fs(dir.to_path_buf());
@@ -1196,17 +1197,17 @@ mod tests {
 
         // Build a long needle that exceeds the base buffer size, then place it once.
         let needle_len = CONTENT_BUFFER_BYTES + 8;
-        let needle: String = iter::repeat('N').take(needle_len).collect();
+        let needle: String = std::iter::repeat_n('N', needle_len).collect();
         let needle_bytes = needle.as_bytes();
 
         let mut payload = Vec::new();
-        payload.extend(iter::repeat(b'a').take(16));
+        payload.extend(std::iter::repeat_n(b'a', 16));
         payload.extend_from_slice(needle_bytes);
-        payload.extend(iter::repeat(b'b').take(16));
+        payload.extend(std::iter::repeat_n(b'b', 16));
         fs::write(dir.join("long_needle.bin"), &payload).unwrap();
 
         let mut cache = SearchCache::walk_fs(dir.to_path_buf());
-        let query = format!("content:{}", needle);
+        let query = format!("content:{needle}");
         let indices = guard_indices(cache.search_with_options(
             &query,
             SearchOptions {
@@ -1216,7 +1217,11 @@ mod tests {
         ));
         assert_eq!(indices.len(), 1);
         let nodes = cache.expand_file_nodes(&indices);
-        assert!(nodes.iter().any(|node| node.path.ends_with("long_needle.bin")));
+        assert!(
+            nodes
+                .iter()
+                .any(|node| node.path.ends_with("long_needle.bin"))
+        );
     }
 
     #[test]
