@@ -230,7 +230,10 @@ fn segment_1b_lastweek_calendar_regression() {
 
     let lastweek_hits = cache.search("dm:lastweek").unwrap();
     let lastweek_names = list_names(&cache, &lastweek_hits);
-    assert_eq!(lastweek_names, vec!["lastweek_edge.txt", "lastweek_mid.txt"]);
+    assert_eq!(
+        lastweek_names,
+        vec!["lastweek_edge.txt", "lastweek_mid.txt"]
+    );
 
     let pastweek_hits = cache.search("dm:pastweek").unwrap();
     let pastweek_names = list_names(&cache, &pastweek_hits);
@@ -515,12 +518,7 @@ fn segment_11_created_keyword_filters() {
     let lastweek_mid = lastweek_start + (lastweek_end - lastweek_start) / 2;
     set_file_times(&mut cache, today_idx, now, now);
     set_file_times(&mut cache, lastweek_idx, lastweek_mid, now);
-    set_file_times(
-        &mut cache,
-        month_idx,
-        now - 20 * SECONDS_PER_DAY,
-        now,
-    );
+    set_file_times(&mut cache, month_idx, now - 20 * SECONDS_PER_DAY, now);
     set_file_times(
         &mut cache,
         old_idx,
@@ -538,7 +536,11 @@ fn segment_11_created_keyword_filters() {
 
     let pastmonth_hits = cache.search("dc:pastmonth").unwrap();
     let pastmonth_names = list_names(&cache, &pastmonth_hits);
-    let mut expected_month = vec!["created_lastweek.txt", "created_month.txt", "created_today.txt"];
+    let mut expected_month = vec![
+        "created_lastweek.txt",
+        "created_month.txt",
+        "created_today.txt",
+    ];
     expected_month.sort();
     assert_eq!(pastmonth_names, expected_month);
 
