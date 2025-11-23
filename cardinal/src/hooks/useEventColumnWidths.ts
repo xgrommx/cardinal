@@ -1,12 +1,9 @@
 import { useCallback, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { CONTAINER_PADDING } from '../constants';
-
-const MIN_COLUMN_WIDTH = 80;
-const MAX_COLUMN_WIDTH = 800;
+import { CONTAINER_PADDING, MAX_COL_WIDTH, MIN_COL_WIDTH } from '../constants';
 
 const clampWidth = (value: number): number =>
-  Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, value));
+  Math.max(MIN_COL_WIDTH, Math.min(MAX_COL_WIDTH, value));
 
 export type EventColumnKey = 'time' | 'name' | 'path';
 type EventColumnWidths = Record<EventColumnKey, number>;
