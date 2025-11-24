@@ -19,7 +19,7 @@ Grab the latest packaged builds from [GitHub Releases](https://github.com/cardis
 
 ### i18n support
 
-Need a different language? Click the 🌍 button in the status bar to switch instantly.
+Need a different language? Click the ⚙️ button in the status bar to switch instantly.
 
 ### Search basics
 
