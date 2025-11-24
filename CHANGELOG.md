@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11 — 2025-11-25
+- Implement `content:`, `nosubfolders:`filter
+- Improve file selection and drag-drop support
+- Cleaner app menu and context menu
+- make ESC hide main window
+
 ## 0.1.10 — 2025-11-19
 - Added new metadata filters (`dm:`, `dc:`, `type:`, `audio:`, `video:`, `doc:`, `exe:`, `size:`) for more precise searches.
 - Reworked the parser/optimizer pipeline to flatten redundant AND/OR groups, collapse empty expressions, and reorder metadata filters for faster searching.
