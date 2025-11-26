@@ -10,6 +10,7 @@ type FileRowProps = {
   rowIndex: number;
   style?: CSSProperties;
   onContextMenu?: (event: ReactMouseEvent<HTMLDivElement>, path: string) => void;
+  onOpen?: (path: string) => void;
   onSelect?: (
     path: string,
     rowIndex: number,
@@ -26,6 +27,7 @@ export const FileRow = memo(function FileRow({
   rowIndex,
   style,
   onContextMenu,
+  onOpen,
   onSelect,
   isSelected = false,
   selectedPaths = new Set(),
@@ -76,6 +78,13 @@ export const FileRow = memo(function FileRow({
     }
   };
 
+  const handleDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (path && onOpen) {
+      onOpen(path);
+    }
+  };
+
   const handleDragStart = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       if (!path) {
@@ -107,6 +116,7 @@ export const FileRow = memo(function FileRow({
       className={rowClassName}
       onContextMenu={handleContextMenu}
       onMouseDown={handleMouseDown}
+      onDoubleClick={handleDoubleClick}
       draggable={true}
       onDragStart={handleDragStart}
       aria-selected={isSelected}

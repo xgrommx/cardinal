@@ -214,6 +214,15 @@ pub fn open_in_finder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_path(path: String) -> Result<(), String> {
+    Command::new("open")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| format!("Failed to open path: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn preview_with_quicklook(path: String) -> Result<(), String> {
     Command::new("qlmanage")
         .arg("-p")

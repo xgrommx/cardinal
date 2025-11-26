@@ -10,7 +10,7 @@ use background::{
 use cardinal_sdk::EventWatcher;
 use commands::{
     SearchJob, SearchState, activate_main_window, get_app_status, get_nodes_info, hide_main_window,
-    open_in_finder, preview_with_quicklook, request_app_exit, search, start_logic,
+    open_in_finder, open_path, preview_with_quicklook, request_app_exit, search, start_logic,
     toggle_main_window, trigger_rescan, update_icon_viewport,
 };
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded, unbounded};
@@ -117,6 +117,7 @@ pub fn run() -> Result<()> {
             get_app_status,
             trigger_rescan,
             open_in_finder,
+            open_path,
             preview_with_quicklook,
             request_app_exit,
             start_logic,

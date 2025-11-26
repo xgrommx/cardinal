@@ -449,6 +449,15 @@ function App() {
     [selectedPaths, showFilesContextMenu],
   );
 
+  const handleRowOpen = useCallback((path: string) => {
+    if (!path) {
+      return;
+    }
+    invoke('open_path', { path }).catch((error) => {
+      console.error('Failed to open file', error);
+    });
+  }, []);
+
   const renderRow = useCallback(
     (rowIndex: number, item: SearchResultItem | undefined, rowStyle: CSSProperties) => {
       const path = item?.path;
@@ -462,6 +471,7 @@ function App() {
           style={{ ...rowStyle, width: 'var(--columns-total)' }} // Enforce column width CSS vars for virtualization rows
           onContextMenu={(event, contextPath) => handleRowContextMenu(event, contextPath)}
           onSelect={handleRowSelect}
+          onOpen={handleRowOpen}
           isSelected={isSelected}
           selectedPaths={selectedPaths}
           caseInsensitive={!caseSensitive}
@@ -469,7 +479,14 @@ function App() {
         />
       );
     },
-    [handleRowContextMenu, handleRowSelect, selectedPaths, caseSensitive, highlightTerms],
+    [
+      handleRowContextMenu,
+      handleRowSelect,
+      handleRowOpen,
+      selectedPaths,
+      caseSensitive,
+      highlightTerms,
+    ],
   );
 
   const displayState: DisplayState = (() => {
