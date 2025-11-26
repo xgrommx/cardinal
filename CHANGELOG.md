@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12 — 2025-11-27
+- Allow double-clicking a result row to open the file immediately.
+- Support wildcards in multi-path-segment queries for more flexible searches.
+
 ## 0.1.11 — 2025-11-25
 - Implement `content:`, `nosubfolders:`filter
 - Improve file selection and drag-drop support
