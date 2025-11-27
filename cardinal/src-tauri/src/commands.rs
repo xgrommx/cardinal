@@ -10,7 +10,7 @@ use search_cache::{SearchOptions, SearchOutcome, SearchResultNode, SlabIndex, Sl
 use search_cancel::CancellationToken;
 use serde::{Deserialize, Serialize};
 use std::{process::Command, sync::atomic::Ordering};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tracing::{info, warn};
 
 #[derive(Debug, Clone, Copy, Deserialize, Default)]
@@ -96,6 +96,39 @@ impl NodeInfoMetadata {
         }
     }
 }
+
+macro_rules! quicklook_command {
+    ($name:ident, $quicklook_fn:path) => {
+        #[tauri::command]
+        pub fn $name(window: WebviewWindow, path: String) -> Result<bool, String> {
+            #[cfg(target_os = "macos")]
+            {
+                let ns_window_handle = window
+                    .ns_window()
+                    .map_err(|e| format!("Failed to get window handle: {e}"))?;
+
+                let window_ptr_addr: usize = ns_window_handle as usize;
+                let (tx, rx) = std::sync::mpsc::channel();
+
+                let _ = window.app_handle().run_on_main_thread(move || {
+                    let result = $quicklook_fn(&path, window_ptr_addr as *mut std::ffi::c_void);
+                    let _ = tx.send(result);
+                });
+
+                rx.recv()
+                    .map_err(|_| "Failed to receive quicklook result".into())
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                Err("QuickLook is only available on macOS".into())
+            }
+        }
+    };
+}
+
+quicklook_command!(toggle_quicklook, crate::quicklook::toggle);
+quicklook_command!(update_quicklook, crate::quicklook::update);
+quicklook_command!(open_quicklook, crate::quicklook::open);
 
 #[tauri::command]
 pub async fn search(
@@ -219,16 +252,6 @@ pub fn open_path(path: String) -> Result<(), String> {
         .arg(&path)
         .spawn()
         .map_err(|e| format!("Failed to open path: {e}"))?;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn preview_with_quicklook(path: String) -> Result<(), String> {
-    Command::new("qlmanage")
-        .arg("-p")
-        .arg(&path)
-        .spawn()
-        .map_err(|e| format!("Failed to launch Quick Look preview: {e}"))?;
     Ok(())
 }
 

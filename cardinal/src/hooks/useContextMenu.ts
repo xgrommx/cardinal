@@ -10,7 +10,10 @@ type UseContextMenuResult = {
   showHeaderContextMenu: (event: ReactMouseEvent<HTMLElement>) => void;
 };
 
-export function useContextMenu(autoFitColumns: (() => void) | null = null): UseContextMenuResult {
+export function useContextMenu(
+  autoFitColumns: (() => void) | null = null,
+  onQuickLook?: () => void,
+): UseContextMenuResult {
   const { t } = useTranslation();
 
   const buildFileMenuItems = useCallback(
@@ -55,12 +58,16 @@ export function useContextMenu(autoFitColumns: (() => void) | null = null): UseC
           text: t('contextMenu.quickLook'),
           accelerator: 'Space',
           action: () => {
-            void invoke('preview_with_quicklook', { path });
+            void invoke('open_quicklook', { path });
+
+            if (onQuickLook) {
+              onQuickLook();
+            }
           },
         },
       ];
     },
-    [t],
+    [t, onQuickLook],
   );
 
   const buildHeaderMenuItems = useCallback((): MenuItemOptions[] => {
