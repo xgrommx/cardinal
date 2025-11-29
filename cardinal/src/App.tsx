@@ -21,6 +21,7 @@ import FSEventsPanel from './components/FSEventsPanel';
 import type { FSEventsPanelHandle } from './components/FSEventsPanel';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { primaryMonitor, getCurrentWindow } from '@tauri-apps/api/window';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 import { useTranslation } from 'react-i18next';
 import { useFullDiskAccessPermission } from './hooks/useFullDiskAccessPermission';
@@ -30,12 +31,48 @@ import type { DisplayState } from './components/StateDisplay';
 
 type ActiveTab = StatusTabKey;
 
+type QuickLookRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type QuickLookItemPayload = {
+  path: string;
+  rect?: QuickLookRect;
+  transitionImage?: string;
+};
+
+type QuickLookKeydownPayload = {
+  keyCode: number;
+  characters?: string | null;
+  modifiers: {
+    shift: boolean;
+    control: boolean;
+    option: boolean;
+    command: boolean;
+  };
+};
+
+type WindowGeometry = {
+  windowOrigin: { x: number; y: number };
+  mainScreenHeight: number;
+};
+
+const escapePathForSelector = (value: string): string => {
+  return window.CSS.escape(value);
+};
+
 const isEditableTarget = (target: EventTarget | null): boolean => {
   const element = target as HTMLElement | null;
   if (!element) return false;
   const tagName = element.tagName;
   return tagName === 'INPUT' || tagName === 'TEXTAREA' || element.isContentEditable;
 };
+
+const QUICK_LOOK_KEYCODE_DOWN = 125;
+const QUICK_LOOK_KEYCODE_UP = 126;
 
 function App() {
   const {
@@ -66,11 +103,9 @@ function App() {
   const [selectedPaths, setSelectedPaths] = useState(new Set<string>());
   const [activeRowIndex, setActiveRowIndex] = useState<number | null>(null);
   const [shiftAnchorIndex, setShiftAnchorIndex] = useState<number | null>(null);
+  const selectedPathsRef = useRef(selectedPaths);
 
   const [isWindowFocused, setIsWindowFocused] = useState<boolean>(() => {
-    if (typeof document === 'undefined') {
-      return true;
-    }
     return document.hasFocus();
   });
   const eventsPanelRef = useRef<FSEventsPanelHandle | null>(null);
@@ -128,10 +163,168 @@ function App() {
     [shiftAnchorIndex, results],
   );
 
+  const getQuickLookItems = useCallback(async (): Promise<QuickLookItemPayload[]> => {
+    if (activeTab !== 'files') {
+      return [];
+    }
+
+    const paths = Array.from(selectedPaths);
+    if (!paths.length) {
+      return [];
+    }
+
+    let windowGeometry: WindowGeometry | null | undefined;
+
+    const resolveWindowGeometry = async (): Promise<WindowGeometry | null> => {
+      if (windowGeometry !== undefined) {
+        return windowGeometry;
+      }
+
+      if (typeof window === 'undefined') {
+        windowGeometry = null;
+        return windowGeometry;
+      }
+
+      try {
+        const currentWindow = getCurrentWindow();
+        const [position, monitor, scaleFactor] = await Promise.all([
+          currentWindow.innerPosition(),
+          primaryMonitor(),
+          currentWindow.scaleFactor(),
+        ]);
+
+        if (!monitor) {
+          windowGeometry = null;
+          return windowGeometry;
+        }
+
+        const scale = scaleFactor || monitor.scaleFactor || window.devicePixelRatio || 1;
+        windowGeometry = {
+          windowOrigin: {
+            x: position.x / scale,
+            y: position.y / scale,
+          },
+          mainScreenHeight: monitor.size.height / scale,
+        };
+      } catch (error) {
+        console.warn('Failed to resolve window metrics for Quick Look', error);
+        windowGeometry = null;
+      }
+
+      return windowGeometry;
+    };
+
+    const buildItem = async (path: string): Promise<QuickLookItemPayload> => {
+      const selector = `[data-row-path="${escapePathForSelector(path)}"]`;
+      const row = document.querySelector<HTMLElement>(selector);
+      if (!row) {
+        return { path };
+      }
+      const anchor = row.querySelector<HTMLElement>('.file-icon, .file-icon-placeholder');
+      if (!anchor) {
+        return { path };
+      }
+      const iconImage = row.querySelector<HTMLImageElement>('img.file-icon');
+      if (!iconImage) {
+        return { path };
+      }
+      const transitionImage = iconImage.src;
+
+      const rect = anchor.getBoundingClientRect();
+      const geometry = await resolveWindowGeometry();
+      if (!geometry) {
+        return { path };
+      }
+
+      // This compensates for a coordinate system mismatch on macOS:
+      // - `geometry.windowOrigin.y` (from Tauri's `innerPosition`) is relative to the *visible* screen area (below the menu bar).
+      // - `geometry.mainScreenHeight` is the *full* screen height.
+      // - `window.screen.availTop` provides the height of the menu bar, allowing us to correctly adjust `logicalYTop`
+      //   to be relative to the absolute top of the screen for `QLPreviewPanel`'s `sourceFrameOnScreenForPreviewItem`.
+      const screenTopOffset = window.screen.availTop ?? 0;
+
+      const logicalX = geometry.windowOrigin.x + rect.left;
+      const logicalYTop = geometry.windowOrigin.y + screenTopOffset + rect.top;
+      const logicalWidth = rect.width;
+      const logicalHeight = rect.height;
+
+      const x = logicalX;
+      const y = geometry.mainScreenHeight - (logicalYTop + logicalHeight);
+
+      return {
+        path,
+        rect: {
+          x,
+          y,
+          width: logicalWidth,
+          height: logicalHeight,
+        },
+        transitionImage,
+      };
+    };
+
+    const items = await Promise.all(paths.map((path) => buildItem(path)));
+    return items;
+  }, [activeTab, selectedPaths]);
+
+  const toggleQuickLookPanel = useCallback(() => {
+    void (async () => {
+      const items = await getQuickLookItems();
+      if (!items.length) {
+        return;
+      }
+      try {
+        await invoke('toggle_quicklook', { items });
+      } catch (error) {
+        console.error('Failed to preview file with Quick Look', error);
+      }
+    })();
+  }, [getQuickLookItems]);
+
+  const updateQuickLookPanel = useCallback(() => {
+    void (async () => {
+      const items = await getQuickLookItems();
+      if (!items.length) {
+        return;
+      }
+      try {
+        await invoke('update_quicklook', { items });
+      } catch (error) {
+        console.error('Failed to update Quick Look', error);
+      }
+    })();
+  }, [getQuickLookItems]);
+
+  const moveSelection = useCallback(
+    (delta: 1 | -1) => {
+      if (activeTab !== 'files' || !results.length) {
+        return;
+      }
+
+      const fallbackIndex = delta > 0 ? -1 : results.length;
+      const baseIndex = activeRowIndex ?? fallbackIndex;
+      const nextIndex = Math.min(Math.max(baseIndex + delta, 0), results.length - 1);
+
+      if (nextIndex === activeRowIndex) {
+        return;
+      }
+
+      const nextPath = virtualListRef.current?.getItem?.(nextIndex)?.path;
+      if (nextPath) {
+        handleRowSelect(nextPath, nextIndex, {
+          isShift: false,
+          isMeta: false,
+          isCtrl: false,
+        });
+      }
+    },
+    [activeRowIndex, activeTab, handleRowSelect, results.length],
+  );
+
   const {
     showContextMenu: showFilesContextMenu,
     showHeaderContextMenu: showFilesHeaderContextMenu,
-  } = useContextMenu(autoFitColumns, selectedPaths);
+  } = useContextMenu(autoFitColumns, toggleQuickLookPanel);
 
   const {
     showContextMenu: showEventsContextMenu,
@@ -213,6 +406,10 @@ function App() {
   }, [focusSearchInput]);
 
   useEffect(() => {
+    selectedPathsRef.current = selectedPaths;
+  }, [selectedPaths]);
+
+  useEffect(() => {
     const handleOpenPreferences = () => setIsPreferencesOpen(true);
 
     window.addEventListener(OPEN_PREFERENCES_EVENT, handleOpenPreferences);
@@ -275,31 +472,25 @@ function App() {
         return;
       }
 
-      const previewPaths = selectedPaths.size ? Array.from(selectedPaths) : [];
-      if (!previewPaths.length) {
+      if (!selectedPaths.size) {
         return;
       }
 
       event.preventDefault();
-      invoke('open_quicklook', { paths: previewPaths }).catch((error) => {
-        console.error('Failed to preview file with Quick Look', error);
-      });
+      toggleQuickLookPanel();
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, selectedPaths]);
+  }, [activeTab, toggleQuickLookPanel, selectedPaths]);
 
   useEffect(() => {
-    if (!selectedPaths.size) {
+    if (activeTab !== 'files' || !selectedPaths.size) {
       return;
     }
 
-    const previewPaths = Array.from(selectedPaths);
-    invoke('update_quicklook', { paths: previewPaths }).catch((error) => {
-      console.error('Failed to update Quick Look', error);
-    });
-  }, [selectedPaths]);
+    updateQuickLookPanel();
+  }, [activeTab, selectedPaths, updateQuickLookPanel]);
 
   useEffect(() => {
     if (activeTab !== 'files') {
@@ -319,34 +510,14 @@ function App() {
         return;
       }
 
-      if (!results.length) {
-        return;
-      }
-
       event.preventDefault();
-
       const delta = event.key === 'ArrowDown' ? 1 : -1;
-      const fallbackIndex = delta > 0 ? -1 : results.length;
-      const baseIndex = activeRowIndex ?? fallbackIndex;
-      const nextIndex = Math.min(Math.max(baseIndex + delta, 0), results.length - 1);
-
-      if (nextIndex === activeRowIndex) {
-        return;
-      }
-
-      const nextPath = virtualListRef.current?.getItem?.(nextIndex)?.path;
-      if (nextPath) {
-        handleRowSelect(nextPath, nextIndex, {
-          isShift: false,
-          isMeta: false,
-          isCtrl: false,
-        });
-      }
+      moveSelection(delta);
     };
 
     window.addEventListener('keydown', handleArrowNavigation);
     return () => window.removeEventListener('keydown', handleArrowNavigation);
-  }, [activeRowIndex, activeTab, handleRowSelect, results.length]);
+  }, [activeTab, moveSelection]);
 
   useEffect(() => {
     const handleGlobalShortcuts = (event: KeyboardEvent) => {
@@ -389,6 +560,46 @@ function App() {
     window.addEventListener('keydown', handleGlobalShortcuts);
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [focusSearchInput, activeTab, activePath]);
+
+  useEffect(() => {
+    let unlisten: UnlistenFn | null = null;
+
+    const setup = async () => {
+      try {
+        unlisten = await listen<QuickLookKeydownPayload>('quicklook-keydown', (event) => {
+          if (activeTab !== 'files') {
+            return;
+          }
+
+          const payload = event.payload;
+          if (!payload || !selectedPathsRef.current.size) {
+            return;
+          }
+
+          const { keyCode, modifiers } = payload;
+          if (modifiers.command || modifiers.option || modifiers.control) {
+            return;
+          }
+
+          if (keyCode === QUICK_LOOK_KEYCODE_DOWN) {
+            moveSelection(1);
+          } else if (keyCode === QUICK_LOOK_KEYCODE_UP) {
+            moveSelection(-1);
+          }
+        });
+      } catch (error) {
+        console.error('Failed to subscribe to Quick Look key events', error);
+      }
+    };
+
+    void setup();
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [activeTab, moveSelection]);
 
   useEffect(() => {
     if (activeRowIndex == null) {

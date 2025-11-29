@@ -12,7 +12,7 @@ type UseContextMenuResult = {
 
 export function useContextMenu(
   autoFitColumns: (() => void) | null = null,
-  selectedPaths?: Set<string>,
+  onQuickLookRequest?: () => void | Promise<void>,
 ): UseContextMenuResult {
   const { t } = useTranslation();
 
@@ -25,7 +25,7 @@ export function useContextMenu(
       const segments = path.split(/[\\/]/).filter(Boolean);
       const filename = segments.length > 0 ? segments[segments.length - 1] : path;
 
-      return [
+      const items: MenuItemOptions[] = [
         {
           id: 'context_menu.open_in_finder',
           text: t('contextMenu.openInFinder'),
@@ -53,20 +53,24 @@ export function useContextMenu(
             }
           },
         },
-        {
+      ];
+
+      if (onQuickLookRequest) {
+        items.push({
           id: 'context_menu.quicklook',
           text: t('contextMenu.quickLook'),
           accelerator: 'Space',
           action: () => {
-            const previewPaths = selectedPaths ? Array.from(selectedPaths) : [];
-            if (previewPaths.length) {
-              void invoke('open_quicklook', { paths: previewPaths });
+            if (onQuickLookRequest) {
+              void onQuickLookRequest();
             }
           },
-        },
-      ];
+        });
+      }
+
+      return items;
     },
-    [selectedPaths, t],
+    [onQuickLookRequest, t],
   );
 
   const buildHeaderMenuItems = useCallback((): MenuItemOptions[] => {

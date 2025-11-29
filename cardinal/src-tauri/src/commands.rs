@@ -1,7 +1,9 @@
 use crate::{
     LOGIC_START,
     lifecycle::{EXIT_REQUESTED, load_app_state},
-    quicklook::{close_preview_panel, open_preview_panel, update_preview_panel},
+    quicklook::{
+        QuickLookItemInput, close_preview_panel, toggle_preview_panel, update_preview_panel,
+    },
     window_controls::{WindowToggle, activate_window, hide_window, toggle_window},
 };
 use anyhow::Result;
@@ -110,20 +112,28 @@ pub fn close_quicklook(app_handle: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn update_quicklook(app_handle: AppHandle, paths: Vec<String>) -> Result<(), String> {
+pub fn update_quicklook(
+    app_handle: AppHandle,
+    items: Vec<QuickLookItemInput>,
+) -> Result<(), String> {
+    let app_handle_cloned = app_handle.clone();
     app_handle
         .run_on_main_thread(move || {
-            update_preview_panel(paths);
+            update_preview_panel(app_handle_cloned, items);
         })
         .map_err(|e| format!("Failed to dispatch quicklook action: {e:?}"))?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn open_quicklook(app_handle: AppHandle, paths: Vec<String>) -> Result<(), String> {
+pub fn toggle_quicklook(
+    app_handle: AppHandle,
+    items: Vec<QuickLookItemInput>,
+) -> Result<(), String> {
+    let app_handle_cloned = app_handle.clone();
     app_handle
         .run_on_main_thread(move || {
-            open_preview_panel(paths);
+            toggle_preview_panel(app_handle_cloned, items);
         })
         .map_err(|e| format!("Failed to dispatch quicklook action: {e:?}"))?;
     Ok(())

@@ -114,6 +114,7 @@ export const FileRow = memo(function FileRow({
     <div
       style={style}
       className={rowClassName}
+      data-row-path={path ?? undefined}
       onContextMenu={handleContextMenu}
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
